@@ -326,7 +326,9 @@ api::Itinerary journey_to_response(
                                 });
                               })};
                 })};
-          })};
+          }),
+      .successChance_ = j.success_chance
+      };
 
   auto const append = [&](api::Itinerary&& x) {
     itinerary.legs_.insert(end(itinerary.legs_),

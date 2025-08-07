@@ -2630,6 +2630,7 @@ components:
         - endTime
         - transfers
         - legs
+        - transferTime
       properties:
         duration:
           description: journey duration in seconds
@@ -2655,6 +2656,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FareTransfer'
+        successChance:
+          type: number
+          format: float
+          description: time of the transfers
 
     Transfer:
       description: transfer from one location to another

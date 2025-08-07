@@ -20,6 +20,7 @@ const translations: Translations = {
 	arrival: 'Ankunft',
 	departure: 'Abfahrt',
 	duration: 'Dauer',
+	successChance: 'Erfolgsquote',
 	arrivals: 'Ankünfte',
 	connections: 'Verbindungen',
 	departures: 'Abfahrten',
