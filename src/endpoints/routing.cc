@@ -50,6 +50,8 @@
 #include "motis/timetable/time_conv.h"
 #include "motis/update_rtt_td_footpaths.h"
 
+#include "boost/function.hpp"
+
 namespace n = nigiri;
 using namespace std::chrono_literals;
 
@@ -760,7 +762,7 @@ api::plan_response routing::operator()(boost::urls::url_view const& url) const {
         *tt_, rtt, *search_state, *raptor_state, std::move(q),
         query.arriveBy_ ? n::direction::kBackward : n::direction::kForward,
         query.timeout_.has_value() ? std::chrono::seconds{*query.timeout_}
-                                   : max_timeout);
+                                   : max_timeout, *arr_dist_);
 
     metrics_->routing_journeys_found_.Increment(
         static_cast<double>(r.journeys_->size()));

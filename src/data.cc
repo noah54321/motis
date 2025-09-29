@@ -182,6 +182,12 @@ data::data(std::filesystem::path p, config const& c)
     }
   });
 
+  auto arr_dist = std::async(std::launch::async, [&]() {
+    if (c.tiles_) {
+      load_arr_dist();
+    }
+  });
+
   auto const throw_if_failed = [](char const* context, auto& future) {
     try {
       future.get();
@@ -199,6 +205,7 @@ data::data(std::filesystem::path p, config const& c)
   matches.wait();
   elevators.wait();
   tiles.wait();
+  arr_dist.wait();
 
   throw_if_failed("geocoder", geocoder);
   throw_if_failed("tt", tt);
@@ -298,6 +305,61 @@ void data::load_tiles() {
   auto const db_size = config_.tiles_.value().db_size_;
   tiles_ = std::make_unique<tiles_data>(
       (path_ / "tiles" / "tiles.mdb").generic_string(), db_size);
+}
+
+void data::load_arr_dist() {
+  std::string filename = "arrival_distribution.csv";
+
+  std::ifstream file(filename);
+  if (!file.is_open()) {
+    throw std::runtime_error("Kann Datei nicht öffnen: " + filename);
+  }
+
+  std::string line;
+  bool first_line = true;
+  std::map<int, std::vector<double>> xs_map;
+  std::map<int, std::vector<double>> ys_map;
+
+  while (std::getline(file, line)) {
+    if (first_line) {
+      first_line = false;
+      continue;  // Kopfzeile überspringen
+    }
+
+    std::stringstream ss(line);
+    std::string cell;
+
+    // Spalte 1: ID
+    if (!std::getline(ss, cell, ';')) continue;
+    int id = std::stoi(cell);
+
+    // Spalte 2: X
+    if (!std::getline(ss, cell, ';')) continue;
+    double x = std::stod(cell);
+
+    // Spalte 3: Y
+    if (!std::getline(ss, cell, ';')) continue;
+    double y = std::stod(cell);
+
+    // Ergebnis einfügen (bei mehrfacher ID einfach anhängen)
+    xs_map[id].push_back(x);
+    ys_map[id].push_back(y);
+  }
+
+  arr_dist_ = std::make_unique<std::map<int, boost::function<double(double)>>>();
+  //arr_dist_ = std::make_unique<std::map<int, boost::math::interpolators::pchip<int>>>();
+
+  for (auto& [id, xs] : xs_map) {
+    try {
+      auto t = boost::math::interpolators::pchip(std::move(xs), std::move(ys_map[id]));
+      (*arr_dist_)[id] = t;
+    } catch (const std::exception& e) {
+      std::cerr << "[load_arr_dist] Fehler bei ID " << id
+                << ": " << e.what() << std::endl;
+    } catch (...) {
+      std::cerr << "[load_arr_dist] Unbekannter Fehler bei ID " << id << std::endl;
+    }
+  }
 }
 
 void data::load_auser_updater(std::string_view tag,

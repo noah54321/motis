@@ -121,6 +121,7 @@ struct routing {
   std::shared_ptr<gbfs::gbfs_data> const& gbfs_;
   odm::bounds const* odm_bounds_;
   metrics_registry* metrics_;
+  std::map<int, boost::function<double(double)>>* arr_dist_;
 };
 
 }  // namespace motis::ep
