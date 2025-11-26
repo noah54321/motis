@@ -118,6 +118,7 @@ int generate(int ac, char** av) {
       p.toPlace_ = d.tags_->id(*d.tt_, random_stop(*d.tt_, stops));
       p.time_ = d.tt_->date_range_.from_ +
                 rand_in(0U, last_day) * date::days{1} + rand_in(6U, 18U) * 1h;
+      p.arriveBy_ = true;
       out << p.to_url("/api/v1/plan") << "\n";
     }
   }
@@ -151,7 +152,16 @@ int batch(int ac, char** av) {
   {
     auto f = cista::mmap{queries_path.generic_string().c_str(),
                          cista::mmap::protection::READ};
-    utl::for_each_token(utl::cstr{f.view()}, '\n', [&](utl::cstr s) {
+    std::string normalized = utl::cstr{f.view()}.str;
+    std::replace(normalized.begin(), normalized.end(), '\r', '\n');
+
+    // doppelte \n entfernen (aus ehem. \r\n)
+    normalized.erase(
+        std::unique(normalized.begin(), normalized.end(),
+                    [](char a, char b){ return a == '\n' && b == '\n'; }),
+        normalized.end()
+    );
+    utl::for_each_token(utl::cstr{normalized}, '\n', [&](utl::cstr s) {
       queries.push_back(api::plan_params{boost::urls::url{s.view()}.params()});
     });
   }
@@ -168,7 +178,7 @@ int batch(int ac, char** av) {
   auto const routing = utl::init_from<ep::routing>(d).value();
   auto const compute_response = [&](std::size_t const id) {
     UTL_START_TIMING(total);
-    auto response = routing(queries.at(id).to_url("/api/v1/plan"));
+    auto response = routing(queries.at(id).to_url("/api/v3/plan"));
     UTL_STOP_TIMING(total);
 
     auto const timing = static_cast<std::uint64_t>(UTL_TIMING_MS(total));

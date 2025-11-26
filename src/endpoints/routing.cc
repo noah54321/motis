@@ -530,7 +530,8 @@ api::plan_response routing::operator()(boost::urls::url_view const& url) const {
     blocked.reset(new osr::bitvec<osr::node_idx_t>{w_->n_nodes()});
   }
 
-  auto const query = api::plan_params{url.params()};
+  auto query = api::plan_params{url.params()};
+  query.arriveBy_ = true;
   auto const api_version = url.encoded_path().contains("/v1/")   ? 1U
                            : url.encoded_path().contains("/v2/") ? 2U
                                                                  : 3U;

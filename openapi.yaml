@@ -520,7 +520,7 @@ paths:
             The default value is 5.
           schema:
             type: integer
-            default: 5
+            default: 1
 
         - name: pageCursor
           in: query
@@ -581,7 +581,7 @@ paths:
               - `arriveBy=false`: number of seconds between the earliest arrival time and the latest arrival time
           schema:
             type: integer
-            default: 7200
+            default: 1
             minimum: 0
 
         - name: requireBikeTransport
