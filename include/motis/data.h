@@ -19,9 +19,6 @@
 #include "motis/rt/auser.h"
 #include "motis/types.h"
 
-#include "boost/math/interpolators/pchip.hpp"
-#include "boost/function.hpp"
-
 namespace motis {
 
 struct elevators;
@@ -104,7 +101,7 @@ struct data {
   ptr<flex::flex_areas> flex_areas_;
   ptr<metrics_registry> metrics_;
   ptr<std::map<std::string, auser>> auser_;
-  ptr<std::map<int, boost::function<double(double)>>> arr_dist_;
+  ptr<std::vector<std::vector<std::pair<int, double>>>> arr_dist_;
 };
 
 }  // namespace motis

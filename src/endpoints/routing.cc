@@ -50,8 +50,6 @@
 #include "motis/timetable/time_conv.h"
 #include "motis/update_rtt_td_footpaths.h"
 
-#include "boost/function.hpp"
-
 namespace n = nigiri;
 using namespace std::chrono_literals;
 

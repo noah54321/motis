@@ -308,7 +308,7 @@ void data::load_tiles() {
 }
 
 void data::load_arr_dist() {
-  std::string filename = "arrival_distribution.csv";
+  std::string filename = "motis_product_type.csv";
 
   std::ifstream file(filename);
   if (!file.is_open()) {
@@ -317,8 +317,8 @@ void data::load_arr_dist() {
 
   std::string line;
   bool first_line = true;
-  std::map<int, std::vector<double>> xs_map;
-  std::map<int, std::vector<double>> ys_map;
+  arr_dist_ = std::make_unique<std::vector<std::vector<std::pair<int, double>>>>();
+  arr_dist_->resize(16);
 
   while (std::getline(file, line)) {
     if (first_line) {
@@ -328,37 +328,19 @@ void data::load_arr_dist() {
 
     std::stringstream ss(line);
     std::string cell;
+    char delimiter = ',';
 
-    // Spalte 1: ID
-    if (!std::getline(ss, cell, ';')) continue;
+    if (!std::getline(ss, cell, delimiter)) continue;
     int id = std::stoi(cell);
 
-    // Spalte 2: X
-    if (!std::getline(ss, cell, ';')) continue;
-    double x = std::stod(cell);
+    if (!std::getline(ss, cell, delimiter)) continue;
+    int t = cell != "Infinity" ? std::stoi(cell) : std::numeric_limits<nigiri::delta_t>::max();
 
-    // Spalte 3: Y
-    if (!std::getline(ss, cell, ';')) continue;
-    double y = std::stod(cell);
 
-    // Ergebnis einfügen (bei mehrfacher ID einfach anhängen)
-    xs_map[id].push_back(x);
-    ys_map[id].push_back(y);
-  }
+    if (!std::getline(ss, cell, delimiter)) continue;
+    double prob = std::stod(cell);
 
-  arr_dist_ = std::make_unique<std::map<int, boost::function<double(double)>>>();
-  //arr_dist_ = std::make_unique<std::map<int, boost::math::interpolators::pchip<int>>>();
-
-  for (auto& [id, xs] : xs_map) {
-    try {
-      auto t = boost::math::interpolators::pchip(std::move(xs), std::move(ys_map[id]));
-      (*arr_dist_)[id] = t;
-    } catch (const std::exception& e) {
-      std::cerr << "[load_arr_dist] Fehler bei ID " << id
-                << ": " << e.what() << std::endl;
-    } catch (...) {
-      std::cerr << "[load_arr_dist] Unbekannter Fehler bei ID " << id << std::endl;
-    }
+    (*arr_dist_)[id].push_back({t, prob});
   }
 }
 
