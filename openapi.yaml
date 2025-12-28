@@ -569,6 +569,26 @@ paths:
               - `arriveBy=true`: the parameters `date` and `time` refer to the arrival time
               - `arriveBy=false`: the parameters `date` and `time` refer to the departure time
 
+        - name: cancellationProbability
+          in: query
+          required: false
+          schema:
+            type: number
+            format: float
+            default: 0.95
+          description: |
+            Optional. Default is `true`.
+
+        - name: maxDelay
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+          description: |
+            Optional. Default is `true`.
+
+
         - name: searchWindow
           in: query
           required: false
