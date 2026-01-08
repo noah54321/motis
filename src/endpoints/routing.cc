@@ -733,7 +733,8 @@ api::plan_response routing::operator()(boost::urls::url_view const& url) const {
                                : std::optional{fastest_direct},
         .fastest_direct_factor_ = query.fastestDirectFactor_,
         .slow_direct_ = query.slowDirect_,
-        .fastest_slow_direct_factor_ = query.fastestSlowDirectFactor_};
+        .fastest_slow_direct_factor_ = query.fastestSlowDirectFactor_,
+        .max_safety_time = query.maxSafetyTime_};
     remove_slower_than_fastest_direct(q);
     UTL_STOP_TIMING(query_preparation);
 

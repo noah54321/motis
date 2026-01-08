@@ -569,6 +569,15 @@ paths:
               - `arriveBy=true`: the parameters `date` and `time` refer to the arrival time
               - `arriveBy=false`: the parameters `date` and `time` refer to the departure time
 
+        - name: maxSafetyTime
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: |
+            Optional. Default is `0`.
+
         - name: searchWindow
           in: query
           required: false
