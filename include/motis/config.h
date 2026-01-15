@@ -29,7 +29,7 @@ struct config {
 
   bool requires_rt_timetable_updates() const;
   bool has_gbfs_feeds() const;
-  bool has_odm() const;
+  bool has_prima() const;
   bool has_elevators() const;
   bool use_street_routing() const;
 
@@ -42,6 +42,7 @@ struct config {
     std::string web_folder_{"ui"};
     unsigned n_threads_{0U};
     std::optional<std::string> data_attribution_link_{};
+    std::optional<std::vector<std::string>> lbs_{};
   };
   std::optional<server> server_{};
 
@@ -68,13 +69,14 @@ struct config {
         std::string url_;
         std::optional<headers_t> headers_{};
 
-        enum struct protocol { gtfsrt, auser, siri };
+        enum struct protocol { gtfsrt, auser, siri, siri_json };
         protocol protocol_{protocol::gtfsrt};
       };
 
       bool operator==(dataset const&) const = default;
 
       std::string path_;
+      std::optional<std::string> script_{};
       bool default_bikes_allowed_{false};
       bool default_cars_allowed_{false};
       bool extend_calendar_{false};
@@ -88,6 +90,7 @@ struct config {
 
     std::string first_day_{"TODAY"};
     std::uint16_t num_days_{365U};
+    bool tb_{false};
     bool railviz_{true};
     bool with_shapes_{true};
     bool adjust_footpaths_{true};
@@ -96,6 +99,7 @@ struct config {
     unsigned link_stop_distance_{100U};
     unsigned update_interval_{60};
     unsigned http_timeout_{30};
+    bool canned_rt_{false};
     bool incremental_rt_update_{false};
     bool use_osm_stop_coordinates_{false};
     bool extend_missing_footpaths_{false};
@@ -111,6 +115,13 @@ struct config {
   struct gbfs {
     bool operator==(gbfs const&) const = default;
 
+    struct ttl {
+      bool operator==(ttl const&) const = default;
+
+      std::optional<std::map<std::string, unsigned>> default_{};
+      std::optional<std::map<std::string, unsigned>> overwrite_{};
+    };
+
     struct restrictions {
       bool operator==(restrictions const&) const = default;
       bool ride_start_allowed_{true};
@@ -120,27 +131,54 @@ struct config {
       std::optional<std::string> return_constraint_{};
     };
 
+    struct oauth_settings {
+      bool operator==(oauth_settings const&) const = default;
+      std::string token_url_;
+      std::string client_id_;
+      std::string client_secret_;
+      std::optional<headers_t> headers_{};
+      std::optional<unsigned> expires_in_;
+    };
+
     struct feed {
       bool operator==(feed const&) const = default;
       std::string url_;
       std::optional<headers_t> headers_{};
+      std::optional<oauth_settings> oauth_{};
+      std::optional<
+          std::variant<std::string, std::map<std::string, std::string>>>
+          group_{};
+      std::optional<
+          std::variant<std::string, std::map<std::string, std::string>>>
+          color_{};
+      std::optional<ttl> ttl_{};
+    };
+
+    struct group {
+      bool operator==(group const&) const = default;
+      std::optional<std::string> name_{};
+      std::optional<std::string> color_{};
+      std::optional<std::string> url_{};
     };
 
     std::map<std::string, feed> feeds_{};
+    std::map<std::string, group> groups_{};
     std::map<std::string, restrictions> default_restrictions_{};
     unsigned update_interval_{60};
     unsigned http_timeout_{30};
     unsigned cache_size_{50};
     std::optional<std::string> proxy_{};
+    std::optional<ttl> ttl_{};
   };
   std::optional<gbfs> gbfs_{};
 
-  struct odm {
-    bool operator==(odm const&) const = default;
+  struct prima {
+    bool operator==(prima const&) const = default;
     std::string url_{};
     std::optional<std::string> bounds_{};
+    std::optional<std::string> ride_sharing_bounds_{};
   };
-  std::optional<odm> odm_{};
+  std::optional<prima> prima_{};
 
   struct elevators {
     bool operator==(elevators const&) const = default;
@@ -150,7 +188,7 @@ struct config {
     std::optional<headers_t> headers_{};
   };
 
-  std::size_t n_threads() const;
+  unsigned n_threads() const;
 
   std::optional<elevators> const& get_elevators() const;
 
@@ -175,8 +213,16 @@ struct config {
     unsigned onetoall_max_travel_minutes_{90U};
     unsigned routing_max_timeout_seconds_{90U};
     unsigned gtfsrt_expose_max_trip_updates_{100U};
+    unsigned street_routing_max_prepost_transit_seconds_{3600U};
+    unsigned street_routing_max_direct_seconds_{21600U};
   };
   std::optional<limits> limits_{};
+
+  struct logging {
+    bool operator==(logging const&) const = default;
+    std::optional<std::string> log_level_{};
+  };
+  std::optional<logging> logging_{};
 
   bool osr_footpath_{false};
   bool geocoding_{false};

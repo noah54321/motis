@@ -3,9 +3,10 @@ import { twMerge } from 'tailwind-merge';
 import { browser } from '$app/environment';
 import { pushState, replaceState } from '$app/navigation';
 import { page } from '$app/state';
-import { trip } from '$lib/api/openapi';
+import { trip } from '@motis-project/motis-client';
 import { joinInterlinedLegs } from './preprocessItinerary';
 import { language } from './i18n/translation';
+import { tick } from 'svelte';
 
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
@@ -36,7 +37,7 @@ export const preserveFromUrl = (
 	}
 };
 
-export const pushStateWithQueryString = (
+export const pushStateWithQueryString = async (
 	// eslint-disable-next-line
 	queryParams: Record<string, any>,
 
@@ -47,9 +48,16 @@ export const pushStateWithQueryString = (
 	preserveFromUrl(queryParams, 'dark');
 	preserveFromUrl(queryParams, 'light');
 	preserveFromUrl(queryParams, 'motis');
+	preserveFromUrl(queryParams, 'language');
 	const params = new URLSearchParams(queryParams);
 	const updateState = replace ? replaceState : pushState;
-	updateState('?' + params.toString(), newState);
+	try {
+		updateState('?' + params.toString(), newState);
+	} catch (e) {
+		console.log(e);
+		await tick();
+		updateState('?' + params.toString(), newState);
+	}
 };
 
 export const closeItinerary = () => {
@@ -81,7 +89,7 @@ export const onClickStop = (
 			selectedStop: { name, stopId, time },
 			selectedItinerary: replace ? undefined : page.state.selectedItinerary,
 			tripId: replace ? undefined : page.state.tripId,
-			showDepartures: true
+			activeTab: 'departures'
 		},
 		replace
 	);
@@ -89,7 +97,7 @@ export const onClickStop = (
 
 export const onClickTrip = async (tripId: string, replace: boolean = false) => {
 	const { data: itinerary, error } = await trip({
-		query: { tripId, joinInterlinedLegs: false, language }
+		query: { tripId, joinInterlinedLegs: false, language: [language] }
 	});
 	if (error) {
 		console.log(error);
@@ -103,7 +111,7 @@ export const onClickTrip = async (tripId: string, replace: boolean = false) => {
 			selectedItinerary: itinerary,
 			tripId: tripId,
 			selectedStop: replace ? undefined : page.state.selectedStop,
-			showDepartures: false
+			activeTab: 'connections'
 		},
 		replace
 	);

@@ -5,6 +5,9 @@
 
 #include "utl/verify.h"
 
+#include "net/bad_request_exception.h"
+#include "net/too_many_exception.h"
+
 #include "nigiri/common/delta_t.h"
 #include "nigiri/routing/limits.h"
 #include "nigiri/routing/one_to_all.h"
@@ -28,15 +31,20 @@ api::Reachable one_to_all::operator()(boost::urls::url_view const& url) const {
   auto const max_travel_minutes =
       config_.limits_.value().onetoall_max_travel_minutes_;
   auto const query = api::oneToAll_params{url.params()};
-  utl::verify(query.maxTravelTime_ <= max_travel_minutes,
-              "maxTravelTime too large: {} > {}", query.maxTravelTime_,
-              max_travel_minutes);
+  utl::verify<net::too_many_exception>(
+      query.maxTravelTime_ <= max_travel_minutes,
+      "maxTravelTime too large ({} > {}). The server admin can change "
+      "this limit in config.yml with 'onetoall_max_travel_minutes'. "
+      "See documentation for details.",
+      query.maxTravelTime_, max_travel_minutes);
   if (query.maxTransfers_.has_value()) {
-    utl::verify(query.maxTransfers_ >= 0U, "maxTransfers < 0: {}",
-                *query.maxTransfers_);
-    utl::verify(query.maxTransfers_ <= n::routing::kMaxTransfers,
-                "maxTransfers > {}: {}", n::routing::kMaxTransfers,
-                *query.maxTransfers_);
+    utl::verify<net::bad_request_exception>(query.maxTransfers_ >= 0U,
+                                            "maxTransfers < 0: {}",
+                                            *query.maxTransfers_);
+    utl::verify<net::too_many_exception>(
+        query.maxTransfers_ <= n::routing::kMaxTransfers,
+        "maxTransfers > {}: {}", n::routing::kMaxTransfers,
+        *query.maxTransfers_);
   }
 
   auto const unreachable = query.arriveBy_
@@ -45,7 +53,7 @@ api::Reachable one_to_all::operator()(boost::urls::url_view const& url) const {
 
   auto const make_place = [&](place_t const& p, n::unixtime_t const t,
                               n::event_type const ev) {
-    auto place = to_place(&tt_, &tags_, w_, pl_, matches_, p);
+    auto place = to_place(&tt_, &tags_, w_, pl_, matches_, ae_, tz_, {}, p);
     if (ev == n::event_type::kArr) {
       place.arrival_ = t;
     } else {
@@ -63,27 +71,34 @@ api::Reachable one_to_all::operator()(boost::urls::url_view const& url) const {
   auto const one_max_time = std::min(
       std::chrono::seconds{query.arriveBy_ ? query.maxPostTransitTime_
                                            : query.maxPreTransitTime_},
-      std::chrono::duration_cast<std::chrono::seconds>(max_travel_time));
+      std::min(
+          std::chrono::duration_cast<std::chrono::seconds>(max_travel_time),
+          std::chrono::seconds{
+              config_.limits_.value()
+                  .street_routing_max_prepost_transit_seconds_}));
   auto const one_dir =
       query.arriveBy_ ? osr::direction::kBackward : osr::direction::kForward;
 
-  auto const r =
-      routing{config_, w_,        l_,      pl_,      elevations_,  &tt_,
-              &tags_,  loc_tree_, fa_,     matches_, way_matches_, rt_,
-              nullptr, gbfs_,     nullptr, metrics_};
+  auto const r = routing{
+      config_, w_,        l_,      pl_,      elevations_,  &tt_,    nullptr,
+      &tags_,  loc_tree_, fa_,     matches_, way_matches_, rt_,     nullptr,
+      gbfs_,   nullptr,   nullptr, nullptr,  nullptr,      metrics_};
   auto gbfs_rd = gbfs::gbfs_routing_data{w_, l_, gbfs_};
 
+  auto const osr_params = get_osr_parameters(query);
+  auto prepare_stats = std::map<std::string, std::uint64_t>{};
   auto q = n::routing::query{
       .start_time_ = time,
       .start_match_mode_ = get_match_mode(one),
       .start_ = r.get_offsets(
           nullptr, one, one_dir, one_modes, std::nullopt, std::nullopt,
-          std::nullopt, false, query.pedestrianProfile_, query.elevationCosts_,
-          one_max_time, query.maxMatchingDistance_, gbfs_rd),
-      .td_start_ =
-          r.get_td_offsets(nullptr, nullptr, one, one_dir, one_modes,
-                           query.pedestrianProfile_, query.elevationCosts_,
-                           query.maxMatchingDistance_, one_max_time, time),
+          std::nullopt, std::nullopt, false, osr_params,
+          query.pedestrianProfile_, query.elevationCosts_, one_max_time,
+          query.maxMatchingDistance_, gbfs_rd, prepare_stats),
+      .td_start_ = r.get_td_offsets(
+          nullptr, nullptr, one, one_dir, one_modes, osr_params,
+          query.pedestrianProfile_, query.elevationCosts_,
+          query.maxMatchingDistance_, one_max_time, time, prepare_stats),
       .max_transfers_ = static_cast<std::uint8_t>(
           query.maxTransfers_.value_or(n::routing::kMaxTransfers)),
       .max_travel_time_ = max_travel_time,
@@ -124,8 +139,9 @@ api::Reachable one_to_all::operator()(boost::urls::url_view const& url) const {
   }
 
   auto const max_results = config_.limits_.value().onetoall_max_results_;
-  utl::verify(reachable.count() <= max_results, "too many results: {} > {}",
-              reachable.count(), max_results);
+  utl::verify<net::too_many_exception>(reachable.count() <= max_results,
+                                       "too many results: {} > {}",
+                                       reachable.count(), max_results);
 
   auto all = std::vector<api::ReachablePlace>{};
   all.reserve(reachable.count());

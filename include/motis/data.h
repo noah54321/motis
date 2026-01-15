@@ -11,6 +11,7 @@
 
 #include "osr/types.h"
 
+#include "motis/adr_extend_tt.h"
 #include "motis/compute_footpaths.h"
 #include "motis/config.h"
 #include "motis/fwd.h"
@@ -56,6 +57,7 @@ struct data {
   void load_flex_areas();
   void load_shapes();
   void load_railviz();
+  void load_tbd();
   void load_geocoder();
   void load_matches();
   void load_way_matches();
@@ -68,9 +70,10 @@ struct data {
 
   auto cista_members() {
     // !!! Remember to add all new members !!!
-    return std::tie(config_, t_, r_, tc_, w_, pl_, l_, elevations_, tt_, tags_,
-                    location_rtree_, elevator_nodes_, shapes_, railviz_static_,
-                    matches_, way_matches_, rt_, gbfs_, odm_bounds_,
+    return std::tie(config_, t_, adr_ext_, f_, tz_, r_, tc_, w_, pl_, l_,
+                    elevations_, tt_, tbd_, tags_, location_rtree_,
+                    elevator_nodes_, shapes_, railviz_static_, matches_,
+                    way_matches_, rt_, gbfs_, odm_bounds_, ride_sharing_bounds_,
                     flex_areas_, metrics_, auser_);
   }
 
@@ -78,6 +81,9 @@ struct data {
   config config_;
 
   cista::wrapped<adr::typeahead> t_;
+  cista::wrapped<adr_ext> adr_ext_;
+  ptr<adr::formatter> f_;
+  ptr<vector_map<adr_extra_place_idx_t, date::time_zone const*>> tz_;
   ptr<adr::reverse> r_;
   ptr<adr::cache> tc_;
   ptr<osr::ways> w_;
@@ -85,6 +91,7 @@ struct data {
   ptr<osr::lookup> l_;
   ptr<osr::elevation_storage> elevations_;
   cista::wrapped<nigiri::timetable> tt_;
+  cista::wrapped<nigiri::routing::tb::tb_data> tbd_;
   cista::wrapped<tag_lookup> tags_;
   ptr<point_rtree<nigiri::location_idx_t>> location_rtree_;
   ptr<hash_set<osr::node_idx_t>> elevator_nodes_;
@@ -97,6 +104,7 @@ struct data {
   std::shared_ptr<rt> rt_{std::make_shared<rt>()};
   std::shared_ptr<gbfs::gbfs_data> gbfs_{};
   ptr<odm::bounds> odm_bounds_;
+  ptr<odm::ride_sharing_bounds> ride_sharing_bounds_;
   ptr<flex::flex_areas> flex_areas_;
   ptr<metrics_registry> metrics_;
   ptr<std::map<std::string, auser>> auser_;

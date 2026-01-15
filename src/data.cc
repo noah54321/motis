@@ -10,6 +10,7 @@
 
 #include "adr/adr.h"
 #include "adr/cache.h"
+#include "adr/formatter.h"
 #include "adr/reverse.h"
 #include "adr/typeahead.h"
 
@@ -18,6 +19,7 @@
 #include "osr/platforms.h"
 #include "osr/ways.h"
 
+#include "nigiri/routing/tb/tb_data.h"
 #include "nigiri/rt/create_rt_timetable.h"
 #include "nigiri/rt/rt_timetable.h"
 #include "nigiri/shapes_storage.h"
@@ -36,6 +38,7 @@
 #include "motis/tag_lookup.h"
 #include "motis/tiles_data.h"
 #include "motis/tt_location_rtree.h"
+#include "utl/get_or_create.h"
 
 namespace fs = std::filesystem;
 namespace n = nigiri;
@@ -97,11 +100,18 @@ data::data(std::filesystem::path p, config const& c)
 
   rt_ = std::make_shared<rt>();
 
-  if (c.odm_.has_value() && c.odm_->bounds_.has_value()) {
-    odm_bounds_ = std::make_unique<odm::bounds>(*c.odm_->bounds_);
+  if (c.prima_.has_value()) {
+    if (c.prima_->bounds_.has_value()) {
+      odm_bounds_ = std::make_unique<odm::bounds>(*c.prima_->bounds_);
+    }
+    if (c.prima_->ride_sharing_bounds_.has_value()) {
+      ride_sharing_bounds_ = std::make_unique<odm::ride_sharing_bounds>(
+          *c.prima_->ride_sharing_bounds_);
+    }
   }
 
   auto geocoder = std::async(std::launch::async, [&]() {
+    f_ = std::make_unique<adr::formatter>();
     if (c.geocoding_) {
       load_geocoder();
     }
@@ -119,12 +129,17 @@ data::data(std::filesystem::path p, config const& c)
       if (c.timetable_->railviz_) {
         load_railviz();
       }
+      if (c.timetable_->tb_) {
+        load_tbd();
+      }
       for (auto const& [tag, d] : c.timetable_->datasets_) {
         if (d.rt_ && utl::any_of(*d.rt_, [](auto const& rt) {
               return rt.protocol_ ==
                          config::timetable::dataset::rt::protocol::auser ||
                      rt.protocol_ ==
-                         config::timetable::dataset::rt::protocol::siri;
+                         config::timetable::dataset::rt::protocol::siri ||
+                     rt.protocol_ ==
+                         config::timetable::dataset::rt::protocol::siri_json;
             })) {
           load_auser_updater(tag, d);
         }
@@ -195,6 +210,7 @@ data::data(std::filesystem::path p, config const& c)
 
   geocoder.wait();
   tt.wait();
+  fa.wait();
   street_routing.wait();
   matches.wait();
   elevators.wait();
@@ -270,10 +286,42 @@ void data::load_railviz() {
   rt_->railviz_rt_ = std::make_unique<railviz_rt_index>(*tt_, *rt_->rtt_);
 }
 
+void data::load_tbd() {
+  tbd_ = cista::read<n::routing::tb::tb_data>(path_ / "tbd.bin");
+}
+
 void data::load_geocoder() {
   t_ = adr::read(path_ / "adr" /
                  (config_.timetable_.has_value() ? "t_ext.bin" : "t.bin"));
   tc_ = std::make_unique<adr::cache>(t_->strings_.size(), 100U);
+
+  if (config_.timetable_.has_value()) {
+    adr_ext_ = cista::read<adr_ext>(path_ / "adr" / "location_extra_place.bin");
+    tz_ = std::make_unique<
+        vector_map<adr_extra_place_idx_t, date::time_zone const*>>();
+    auto cache = hash_map<std::string, date::time_zone const*>{};
+    for (auto const [type, areas] :
+         utl::zip(t_->place_type_, t_->place_areas_)) {
+      if (type != adr::amenity_category::kExtra) {
+        continue;
+      }
+
+      auto const tz = t_->get_tz(areas);
+      if (tz == adr::timezone_idx_t::invalid()) {
+        tz_->push_back(nullptr);
+      } else {
+        auto const tz_name = t_->timezone_names_[tz].view();
+        tz_->push_back(
+            utl::get_or_create(cache, tz_name, [&]() -> date::time_zone const* {
+              try {
+                return date::locate_zone(tz_name);
+              } catch (...) {
+                return nullptr;
+              }
+            }));
+      }
+    }
+  }
 }
 
 void data::load_reverse_geocoder() {
@@ -305,14 +353,23 @@ void data::load_auser_updater(std::string_view tag,
   if (!auser_) {
     auser_ = std::make_unique<std::map<std::string, auser>>();
   }
-  for (auto const& rt : *d.rt_) {
-    if (rt.protocol_ == config::timetable::dataset::rt::protocol::auser) {
-      auser_->try_emplace(rt.url_, *tt_, tags_->get_src(tag),
-                          n::rt::vdv_aus::updater::xml_format::kVdv);
-    } else if (rt.protocol_ == config::timetable::dataset::rt::protocol::siri) {
-      auser_->try_emplace(rt.url_, *tt_, tags_->get_src(tag),
-                          n::rt::vdv_aus::updater::xml_format::kSiri);
+
+  auto const convert = [](config::timetable::dataset::rt::protocol const p) {
+    switch (p) {
+      case config::timetable::dataset::rt::protocol::auser:
+        return n::rt::vdv_aus::updater::xml_format::kVdv;
+      case config::timetable::dataset::rt::protocol::siri:
+        return n::rt::vdv_aus::updater::xml_format::kSiri;
+      case config::timetable::dataset::rt::protocol::siri_json:
+        return n::rt::vdv_aus::updater::xml_format::kSiriJson;
+      case config::timetable::dataset::rt::protocol::gtfsrt: std::unreachable();
     }
+    std::unreachable();
+  };
+
+  for (auto const& rt : *d.rt_) {
+    auser_->try_emplace(rt.url_, *tt_, tags_->get_src(tag),
+                        convert(rt.protocol_));
   }
 }
 

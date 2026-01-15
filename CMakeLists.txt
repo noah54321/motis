@@ -6,6 +6,10 @@ set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
 option(MOTIS_MIMALLOC "use mimalloc" OFF)
 
+set(MOTIS_STACKTRACE "AUTO" CACHE STRING "Enable stacktrace support (AUTO, ON, OFF)")
+set_property(CACHE MOTIS_STACKTRACE PROPERTY STRINGS "AUTO;ON;OFF")
+set(_MOTIS_STACKTRACE_ON "$<OR:$<STREQUAL:${MOTIS_STACKTRACE},ON>,$<AND:$<STREQUAL:${MOTIS_STACKTRACE},AUTO>,$<CONFIG:Debug>>>")
+
 if (NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
     if (MOTIS_MIMALLOC)
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
@@ -82,6 +86,11 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
             -Wno-documentation-deprecated-sync
             -Wno-float-equal
             -Wno-deprecated-declarations
+            -Wno-reserved-identifier
+            -Wno-implicit-int-float-conversion
+            -Wno-nrvo
+            -Wno-thread-safety-negative
+            -Wno-unused-private-field
             -Werror)
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
     set(motis-compile-options -Wall -Wextra -Werror -Wno-unknown-pragmas -Wno-deprecated-declarations)
@@ -113,8 +122,8 @@ target_link_libraries(motislib
     nigiri
     osr
     adr
+    ctx
     boost-json
-    Boost::fiber
     motis-api
     reflectcpp
     web-server
@@ -124,10 +133,13 @@ target_link_libraries(motislib
     crypto
     tg
     lz4_static
+    lb
     web-server
     prometheus-cpp::core
     opentelemetry_trace
     opentelemetry_exporter_otlp_http
+    Boost::stacktrace
+    "$<${_MOTIS_STACKTRACE_ON}:Boost::stacktrace_from_exception>"
 )
 
 
@@ -148,8 +160,12 @@ target_link_libraries(motis
     ianatzdb-res
     pbf_sdf_fonts_res-res
     tiles_server_res-res
+    address_formatting_res-res
 )
 
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
+    target_link_options(motis PRIVATE -Wl,-no_deduplicate)
+endif()
 
 # --- TEST ---
 add_library(motis-generated INTERFACE)
@@ -197,6 +213,14 @@ if (MOTIS_MIMALLOC)
                 $<TARGET_FILE:motis>
                 COMMENT "Ensure mimalloc.dll is loaded first"
         )
+        add_custom_command(
+                TARGET motis-test POST_BUILD
+                COMMAND "${CMAKE_SOURCE_DIR}/deps/mimalloc/bin/minject.exe"
+                --force --inplace
+                $<$<CONFIG:Debug>:--postfix=debug>
+                $<TARGET_FILE:motis-test>
+                COMMENT "Ensure mimalloc.dll is loaded first"
+        )
     endif()
     if (MSVC)
         target_link_options(motis PUBLIC "/include:mi_version")
@@ -206,7 +230,7 @@ endif()
 
 # --- UI ---
 add_custom_target(motis-web-ui
-        COMMAND pnpm install && pnpm build
+        COMMAND pnpm install && pnpm -r build
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ui"
         VERBATIM
 )

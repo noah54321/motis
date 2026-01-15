@@ -3,11 +3,10 @@
 	import { setContext, type Snippet } from 'svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { createShield } from './shield';
-
+	import { browser } from '$app/environment';
 	let {
 		map = $bindable(),
 		zoom = $bindable(),
-
 		bounds = $bindable(),
 		center = $bindable(),
 		style,
@@ -32,27 +31,6 @@
 	let ctx = $state<{ map: maplibregl.Map | undefined }>({ map: undefined });
 	setContext('map', ctx);
 
-	let currentZoom = $state.snapshot(zoom);
-	let currentCenter = $state.snapshot(center);
-
-	const updateZoom = () => {
-		if (map && $state.snapshot(zoom) !== currentZoom) {
-			currentZoom = map.getZoom();
-			map.setZoom(zoom);
-		}
-	};
-
-	const updateCenter = () => {
-		if (
-			map &&
-			center.toString() !=
-				maplibregl.LngLat.convert(currentCenter as maplibregl.LngLatLike).toString()
-		) {
-			currentCenter = map.getCenter();
-			map.setCenter(center);
-		}
-	};
-
 	const updateStyle = () => {
 		if (style != currStyle) {
 			if (!ctx.map && el) {
@@ -60,6 +38,7 @@
 			} else if (ctx.map) {
 				ctx.map.setStyle(style || null);
 			}
+			currStyle = style;
 		}
 	};
 
@@ -98,21 +77,19 @@
 				})
 			);
 
+			const scale = new maplibregl.ScaleControl({
+				maxWidth: 100,
+				unit: 'metric'
+			});
+
+			tmp.addControl(scale, browser && window.innerWidth < 768 ? 'top-left' : 'bottom-left');
+
 			tmp.on('load', () => {
 				map = tmp;
 				ctx.map = tmp;
-				updateZoom();
-				updateCenter();
-				bounds = tmp.getBounds();
-				currStyle = style;
-
 				tmp.on('moveend', () => {
 					zoom = tmp.getZoom();
-					currentZoom = zoom;
-
 					center = tmp.getCenter();
-					currentCenter = center;
-
 					bounds = tmp.getBounds();
 				});
 			});
@@ -129,8 +106,6 @@
 	};
 
 	$effect(updateStyle);
-	$effect(updateZoom);
-	$effect(updateCenter);
 </script>
 
 <div use:createMap bind:this={el} class={className}>

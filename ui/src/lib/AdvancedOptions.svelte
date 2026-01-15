@@ -3,11 +3,11 @@
 	import Button from '$lib/components/ui/button/button.svelte';
 	import { t } from '$lib/i18n/translation';
 	import * as Select from '$lib/components/ui/select';
-	import ChevronUp from 'lucide-svelte/icons/chevron-up';
-	import ChevronDown from 'lucide-svelte/icons/chevron-down';
+	import { ChevronUp, ChevronDown } from '@lucide/svelte';
 	import { Switch } from './components/ui/switch';
-	import type { ElevationCosts } from '$lib/api/openapi';
+	import type { ElevationCosts, ServerConfig } from '@motis-project/motis-client';
 	import { defaultQuery } from '$lib/defaults';
+	import type { Location } from '$lib/Location';
 	import { formatDurationSec } from './formatDuration';
 	import {
 		possibleTransitModes,
@@ -19,9 +19,12 @@
 	import StreetModes from '$lib/StreetModes.svelte';
 	import TransitModeSelect from '$lib/TransitModeSelect.svelte';
 	import { type NumberSelectOption } from '$lib/NumberSelect.svelte';
+	import { generateTimes } from './generateTimes';
+	import ViaStopOptions from './ViaStopOptions.svelte';
 
 	let {
 		useRoutedTransfers = $bindable(),
+		serverConfig,
 		wheelchair = $bindable(),
 		requireBikeTransport = $bindable(),
 		requireCarTransport = $bindable(),
@@ -39,9 +42,16 @@
 		ignorePreTransitRentalReturnConstraints = $bindable(),
 		ignorePostTransitRentalReturnConstraints = $bindable(),
 		ignoreDirectRentalReturnConstraints = $bindable(),
+		preTransitProviderGroups = $bindable(),
+		postTransitProviderGroups = $bindable(),
+		directProviderGroups = $bindable(),
+		via = $bindable(),
+		viaMinimumStay = $bindable(),
+		viaLabels = $bindable(),
 		additionalComponents
 	}: {
 		useRoutedTransfers: boolean;
+		serverConfig: ServerConfig | undefined;
 		wheelchair: boolean;
 		requireBikeTransport: boolean;
 		requireCarTransport: boolean;
@@ -59,6 +69,12 @@
 		ignorePreTransitRentalReturnConstraints: boolean;
 		ignorePostTransitRentalReturnConstraints: boolean;
 		ignoreDirectRentalReturnConstraints: boolean | undefined;
+		preTransitProviderGroups: string[];
+		postTransitProviderGroups: string[];
+		directProviderGroups: string[];
+		via: undefined | Location[];
+		viaMinimumStay: undefined | number[];
+		viaLabels: Record<string, string>;
 		additionalComponents?: Snippet;
 	} = $props();
 
@@ -67,37 +83,13 @@
 		label: i.toString()
 	}));
 
-	const possibleDirectDurations = [
-		5 * 60,
-		10 * 60,
-		15 * 60,
-		20 * 60,
-		25 * 60,
-		30 * 60,
-		35 * 60,
-		40 * 60,
-		45 * 60,
-		50 * 60,
-		60 * 60,
-		90 * 60,
-		120 * 60,
-		180 * 60,
-		240 * 60,
-		300 * 60,
-		360 * 60
-	];
-	const possiblePrePostDurations = [
-		1 * 60,
-		5 * 60,
-		10 * 60,
-		15 * 60,
-		20 * 60,
-		25 * 60,
-		30 * 60,
-		40 * 60,
-		50 * 60,
-		60 * 60
-	];
+	const possibleDirectDurations = $derived(
+		generateTimes(serverConfig?.maxDirectTimeLimit ?? 60 * 60)
+	);
+	const possiblePrePostDurations = $derived(
+		generateTimes(serverConfig?.maxPrePostTransitTimeLimit ?? 60 * 60)
+	);
+
 	function setModes(mode: PrePostDirectMode) {
 		return function (checked: boolean) {
 			if (checked) {
@@ -124,11 +116,14 @@
 	];
 	let expanded = $state<boolean>(false);
 	let allowElevationCosts = $derived(
-		requireBikeTransport ||
-			preTransitModes.includes('BIKE') ||
-			postTransitModes.includes('BIKE') ||
-			directModes?.includes('BIKE')
+		serverConfig?.hasElevation &&
+			(requireBikeTransport ||
+				preTransitModes.includes('BIKE') ||
+				postTransitModes.includes('BIKE') ||
+				directModes?.includes('BIKE'))
 	);
+	let allowStreetRouting = $derived(serverConfig?.hasStreetRouting);
+	let allowRoutedTransfers = $derived(serverConfig?.hasRoutedTransfers);
 </script>
 
 <Button variant="ghost" onclick={() => (expanded = !expanded)}>
@@ -147,6 +142,7 @@
 		<div class="space-y-2">
 			<Switch
 				bind:checked={useRoutedTransfers}
+				disabled={!allowRoutedTransfers}
 				label={t.useRoutedTransfers}
 				id="useRoutedTransfers"
 				onCheckedChange={(checked) => {
@@ -155,8 +151,10 @@
 					}
 				}}
 			/>
+
 			<Switch
 				bind:checked={wheelchair}
+				disabled={!allowRoutedTransfers}
 				label={t.wheelchair}
 				id="wheelchair"
 				onCheckedChange={(checked) => {
@@ -173,15 +171,18 @@
 			/>
 			<Switch
 				bind:checked={requireCarTransport}
+				disabled={!allowRoutedTransfers}
 				label={t.requireCarTransport}
 				id="requireCarTransport"
 				onCheckedChange={(checked) => {
-					if (checked && !useRoutedTransfers) {
+					if (checked && !useRoutedTransfers && allowRoutedTransfers) {
 						useRoutedTransfers = true;
 					}
 					setModes('CAR')(checked);
 				}}
 			/>
+
+			<ViaStopOptions bind:via bind:viaMinimumStay bind:viaLabels />
 
 			<div
 				class="grid {maxTravelTime === undefined
@@ -207,32 +208,38 @@
 			<!-- First mile -->
 			<StreetModes
 				label={t.routingSegments.firstMile}
+				disabled={!allowStreetRouting}
 				bind:modes={preTransitModes}
 				bind:maxTransitTime={maxPreTransitTime}
 				possibleModes={prePostDirectModes}
 				possibleMaxTransitTime={possiblePrePostDurations}
-				ignoreRentalReturnConstraints={ignorePreTransitRentalReturnConstraints}
+				bind:ignoreRentalReturnConstraints={ignorePreTransitRentalReturnConstraints}
+				bind:providerGroups={preTransitProviderGroups}
 			></StreetModes>
 
 			<!-- Last mile -->
 			<StreetModes
 				label={t.routingSegments.lastMile}
+				disabled={!allowStreetRouting}
 				bind:modes={postTransitModes}
 				bind:maxTransitTime={maxPostTransitTime}
 				possibleModes={prePostDirectModes}
 				possibleMaxTransitTime={possiblePrePostDurations}
-				ignoreRentalReturnConstraints={ignorePostTransitRentalReturnConstraints}
+				bind:ignoreRentalReturnConstraints={ignorePostTransitRentalReturnConstraints}
+				bind:providerGroups={postTransitProviderGroups}
 			></StreetModes>
 
 			<!-- Direct -->
 			{#if directModes !== undefined && maxDirectTime !== undefined && ignoreDirectRentalReturnConstraints !== undefined}
 				<StreetModes
 					label={t.routingSegments.direct}
+					disabled={!allowStreetRouting}
 					bind:modes={directModes}
 					bind:maxTransitTime={maxDirectTime}
 					possibleModes={prePostDirectModes}
 					possibleMaxTransitTime={possibleDirectDurations}
-					ignoreRentalReturnConstraints={ignoreDirectRentalReturnConstraints}
+					bind:ignoreRentalReturnConstraints={ignoreDirectRentalReturnConstraints}
+					bind:providerGroups={directProviderGroups}
 				></StreetModes>
 			{/if}
 		</div>
@@ -242,7 +249,11 @@
 			<div class="text-sm">
 				{t.selectElevationCosts}
 			</div>
-			<Select.Root disabled={!allowElevationCosts} type="single" bind:value={elevationCosts}>
+			<Select.Root
+				disabled={!allowElevationCosts || !allowStreetRouting}
+				type="single"
+				bind:value={elevationCosts}
+			>
 				<Select.Trigger aria-label={t.selectElevationCosts}>
 					{t.elevationCosts[elevationCosts]}
 				</Select.Trigger>
@@ -255,7 +266,6 @@
 				</Select.Content>
 			</Select.Root>
 		</div>
-
 		{#if additionalComponents}
 			{@render additionalComponents()}
 		{/if}

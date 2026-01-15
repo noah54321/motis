@@ -1,6 +1,7 @@
 #pragma once
 
 namespace adr {
+struct formatter;
 struct reverse;
 struct area_database;
 struct typeahead;
@@ -32,6 +33,11 @@ struct run_stop;
 namespace routing {
 struct td_offset;
 struct offset;
+
+namespace tb {
+struct tb_data;
+}
+
 }  // namespace routing
 
 }  // namespace nigiri
@@ -48,10 +54,12 @@ struct elevators;
 struct metrics_registry;
 struct way_matches_storage;
 struct data;
+struct adr_ext;
 
 namespace odm {
 struct bounds;
-}
+struct ride_sharing_bounds;
+}  // namespace odm
 
 namespace gbfs {
 struct gbfs_data;

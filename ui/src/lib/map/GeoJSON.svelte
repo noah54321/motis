@@ -1,15 +1,17 @@
 <script lang="ts">
-	import maplibregl from 'maplibre-gl';
+	import maplibregl, { type GeoJSONSourceSpecification } from 'maplibre-gl';
 	import GeoJSON from 'geojson';
 	import { getContext, onDestroy, setContext, type Snippet } from 'svelte';
 
 	class Props {
 		id!: string;
 		data!: GeoJSON.GeoJSON;
+		lineMetrics?: boolean;
 		children!: Snippet;
+		options?: Omit<GeoJSONSourceSpecification, 'type' | 'data'>;
 	}
 
-	let { id, data, children }: Props = $props();
+	let { id, data, lineMetrics = false, children, options }: Props = $props();
 
 	let ctx: { map: maplibregl.Map | null } = getContext('map');
 
@@ -20,14 +22,15 @@
 		if (!ctx.map || data == null) {
 			return;
 		}
-		const src = ctx.map!.getSource(id);
+		const src = ctx.map!.getSource(id) as maplibregl.GeoJSONSource | undefined;
 		if (src) {
-			// @ts-expect-error: setData exists and does what it should
 			src.setData(data);
 		} else {
 			ctx.map!.addSource(id, {
 				type: 'geojson',
-				data
+				lineMetrics,
+				data,
+				...(options ?? {})
 			});
 		}
 		sourceId.id = id;

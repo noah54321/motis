@@ -1,8 +1,8 @@
-import type { Mode, Rental } from './api/openapi';
+import type { Mode, Rental } from '@motis-project/motis-client';
 
 export type Colorable = { routeColor?: string; routeTextColor?: string; mode: Mode };
 
-export type TripInfo = { tripId?: string; routeShortName?: string };
+export type TripInfo = { tripId?: string; displayName?: string };
 
 export type RentalInfo = { rental?: Rental };
 
@@ -26,11 +26,12 @@ export const getModeStyle = (l: LegLike): [string, string, string] => {
 				case 'MOPED':
 					return ['moped', '#075985', 'white'];
 				case 'SCOOTER_SEATED':
+					return ['seated_scooter', '#075985', 'white'];
 				case 'SCOOTER_STANDING':
 					return ['scooter', '#075985', 'white'];
 				case 'OTHER':
 				default:
-					return ['bike', '#075985', 'white'];
+					return ['other', '#075985', 'white'];
 			}
 
 		case 'CAR':
@@ -48,9 +49,9 @@ export const getModeStyle = (l: LegLike): [string, string, string] => {
 			return ['bus', '#9ccc65', 'black'];
 
 		case 'TRAM':
-			return ['tram', '#ff9800', 'white'];
+			return ['tram', '#ebe717', 'white'];
 
-		case 'METRO':
+		case 'SUBURBAN':
 			return ['sbahn', '#4caf50', 'white'];
 
 		case 'SUBWAY':
@@ -80,7 +81,9 @@ export const getModeStyle = (l: LegLike): [string, string, string] => {
 			return ['funicular', '#795548', 'white'];
 
 		case 'CABLE_CAR':
-		case 'AREAL_LIFT':
+			return ['tram', '#795548', 'white'];
+
+		case 'AERIAL_LIFT':
 			return ['aerial_lift', '#795548', 'white'];
 	}
 
@@ -89,9 +92,10 @@ export const getModeStyle = (l: LegLike): [string, string, string] => {
 
 export const getColor = (l: Colorable): [string, string] => {
 	const [_, defaultColor, defaultTextColor] = getModeStyle(l);
-	return !l.routeColor || l.routeColor === '000000'
-		? [defaultColor, defaultTextColor]
-		: ['#' + l.routeColor, '#' + l.routeTextColor || '000000'];
+	if (!l.routeColor) {
+		return [defaultColor, defaultTextColor];
+	}
+	return [`#${l.routeColor}`, `#${l.routeTextColor}`];
 };
 
 export const routeBorderColor = (l: Colorable) => {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/translation';
-	import LoaderCircle from 'lucide-svelte/icons/loader-circle';
+	import { LoaderCircle } from '@lucide/svelte';
 	import ErrorMessage from '$lib/ErrorMessage.svelte';
 	import type { IsochronesOptions } from '$lib/map/IsochronesShared';
 
@@ -18,11 +18,9 @@
 		</div>
 	{/if}
 	{#if options.status == 'EMPTY'}
-		<ErrorMessage e={t.isochrones.noData} />
+		<ErrorMessage message={t.isochrones.noData} status={404} />
 	{/if}
 	{#if options.status == 'FAILED'}
-		<ErrorMessage
-			e={`${t.isochrones.requestFailed}` + (options.error ? `: ${options.error}` : '')}
-		/>
+		<ErrorMessage message={options.errorMessage!} status={options.errorCode} />
 	{/if}
 </div>

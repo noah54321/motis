@@ -42,6 +42,7 @@ tiles:
 timetable:
   first_day: 2024-10-02
   num_days: 2
+  tb: false
   railviz: true
   with_shapes: true
   adjust_footpaths: true
@@ -50,12 +51,13 @@ timetable:
   link_stop_distance: 100
   update_interval: 60
   http_timeout: 30
+  canned_rt: false
   incremental_rt_update: false
   use_osm_stop_coordinates: false
   extend_missing_footpaths: false
   max_footpath_length: 15
-  max_matching_distance: 25
-  preprocess_max_matching_distance: 0
+  max_matching_distance: 25.000000
+  preprocess_max_matching_distance: 0.000000
   datasets:
     de:
       path: delfi.gtfs.zip
@@ -92,6 +94,8 @@ limits:
   onetoall_max_travel_minutes: 90
   routing_max_timeout_seconds: 90
   gtfsrt_expose_max_trip_updates: 100
+  street_routing_max_prepost_transit_seconds: 3600
+  street_routing_max_direct_seconds: 21600
 osr_footpath: true
 geocoding: true
 reverse_geocoding: false
@@ -108,6 +112,7 @@ tiles:
 timetable:
   first_day: 2024-10-02
   num_days: 2
+  tb: false
   datasets:
     de:
       path: delfi.gtfs.zip

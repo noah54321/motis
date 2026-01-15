@@ -35,23 +35,33 @@ osr::level_t get_lvl(osr::ways const*,
                      platform_matches_t const*,
                      nigiri::location_idx_t);
 
-api::Place to_place(osr::location, std::string_view name);
+api::Place to_place(osr::location,
+                    std::string_view name,
+                    std::optional<std::string> const& tz);
+
+api::Place to_place(
+    nigiri::timetable const*,
+    tag_lookup const*,
+    osr::ways const*,
+    osr::platforms const*,
+    platform_matches_t const*,
+    adr_ext const*,
+    tz_map_t const*,
+    nigiri::lang_t const&,
+    place_t,
+    place_t start = osr::location{},
+    place_t dest = osr::location{},
+    std::string_view name = "",
+    std::optional<std::string> const& fallback_tz = std::nullopt);
 
 api::Place to_place(nigiri::timetable const*,
                     tag_lookup const*,
                     osr::ways const*,
                     osr::platforms const*,
                     platform_matches_t const*,
-                    place_t,
-                    place_t start = osr::location{},
-                    place_t dest = osr::location{},
-                    std::string_view name = "");
-
-api::Place to_place(nigiri::timetable const*,
-                    tag_lookup const*,
-                    osr::ways const*,
-                    osr::platforms const*,
-                    platform_matches_t const*,
+                    adr_ext const* ae,
+                    tz_map_t const* tz,
+                    nigiri::lang_t const&,
                     nigiri::rt::run_stop const&,
                     place_t start = osr::location{},
                     place_t dest = osr::location{});
@@ -65,5 +75,9 @@ osr::location get_location(nigiri::timetable const*,
                            place_t const loc,
                            place_t const start = {},
                            place_t const dest = {});
+
+place_t get_place(nigiri::timetable const*,
+                  tag_lookup const*,
+                  std::string_view user_input);
 
 }  // namespace motis

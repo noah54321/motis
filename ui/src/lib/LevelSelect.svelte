@@ -3,7 +3,7 @@
 	import { RadioGroup, Item } from '$lib/components/ui/radio-group/index';
 	import { lngLatToStr } from '$lib/lngLatToStr';
 	import Control from '$lib/map/Control.svelte';
-	import { levels } from '$lib/api/openapi';
+	import { levels } from '@motis-project/motis-client';
 	import type { LngLatBoundsLike } from 'maplibre-gl';
 	import maplibregl from 'maplibre-gl';
 	import { LEVEL_MIN_ZOOM } from './constants';
@@ -46,7 +46,7 @@
 </script>
 
 {#if availableLevels.length > 1}
-	<Control position="bottom-right">
+	<Control position="top-right" class="mb-5">
 		<RadioGroup class="flex flex-col items-end space-y-1" bind:value>
 			{#each availableLevels as l (l)}
 				<Label

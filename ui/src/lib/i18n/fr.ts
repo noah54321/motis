@@ -13,8 +13,21 @@ const translations: Translations = {
 	car: 'Voiture',
 	taxi: 'Taxi',
 	moped: 'Mobylette',
+	unknownVehicleType: 'Type de véhicule inconnu',
+	electricAssist: 'Assistance moteur électrique',
+	electric: 'Électrique',
+	combustion: 'Combustion',
+	combustionDiesel: 'Diesel',
+	hybrid: 'Hybride',
+	plugInHybrid: 'Hybride rechargeable',
+	hydrogenFuelCell: 'Pile à combustible hydrogène',
 	from: 'De',
 	to: 'À',
+	viaStop: 'Arrêt intermédiaire',
+	viaStops: 'Arrêts intermédiaires',
+	addViaStop: 'Ajouter un arrêt intermédiaire',
+	removeViaStop: "Supprimer l'arrêt intermédiaire",
+	viaStayDuration: "Durée minimale d'arrêt",
 	position: 'Position',
 	arrival: 'Arrivée',
 	departure: 'Départ',
@@ -27,6 +40,9 @@ const translations: Translations = {
 	switchToArrivals: 'Afficher les arrivées',
 	switchToDepartures: 'Afficher les départs',
 	track: 'Voie',
+	platform: 'Quai',
+	trackAbr: 'V.',
+	platformAbr: 'Q.',
 	arrivalOnTrack: 'Arrivée sur la voie',
 	tripIntermediateStops: (n: number) => {
 		switch (n) {
@@ -39,12 +55,17 @@ const translations: Translations = {
 		}
 	},
 	sharingProvider: 'Fournisseur',
+	sharingProviders: 'Fournisseurs',
 	transfers: 'correspondances',
+	returnOnlyAtStations: 'Le véhicule doit être retourné à une station.',
 	roundtripStationReturnConstraint: 'Le véhicule doit être retourné à la station de départ.',
+	rentalStation: 'Station',
+	rentalGeofencingZone: 'Zone',
 	noItinerariesFound: 'Aucun itinéraire trouvé.',
 	advancedSearchOptions: 'Options',
 	selectTransitModes: 'Sélectionner les modes de transport en commun',
 	defaultSelectedModes: 'Tous les transports en commun',
+	defaultSelectedProviders: 'Tous les fournisseurs',
 	selectElevationCosts: 'Évitez les pentes abruptes.', // TODO Online translated
 	wheelchair: 'Correspondances accessibles',
 	useRoutedTransfers: 'Utiliser les correspondances routées',
@@ -74,14 +95,14 @@ const translations: Translations = {
 	SUBWAY: 'Métro',
 	FERRY: 'Ferry',
 	AIRPLANE: 'Avion',
-	METRO: 'RER',
+	SUBURBAN: 'RER',
 	BUS: 'Bus',
 	COACH: 'Autocar',
 	RAIL: 'Train',
 	HIGHSPEED_RAIL: 'Train à grande vitesse',
 	LONG_DISTANCE: 'Train intercité',
 	NIGHT_RAIL: 'Train de nuit',
-	REGIONAL_FAST_RAIL: 'Train express régional',
+	REGIONAL_FAST_RAIL: 'Train express',
 	REGIONAL_RAIL: 'Train régional',
 	OTHER: 'Autres',
 	routingSegments: {
@@ -110,6 +131,12 @@ const translations: Translations = {
 		noData: 'Pas de données',
 		requestFailed: 'Échec de la demande'
 	},
+	alerts: {
+		validFrom: 'Valable du',
+		until: 'au',
+		information: 'Informations',
+		more: 'de plus'
+	},
 	RENTAL_BICYCLE: 'Vélo partagé',
 	RENTAL_CARGO_BICYCLE: 'Vélo cargo partagé',
 	RENTAL_CAR: 'Voiture partagée',
@@ -120,10 +147,16 @@ const translations: Translations = {
 	incline: 'Pente',
 	CABLE_CAR: 'Téléphérique',
 	FUNICULAR: 'Funiculaire',
-	AREAL_LIFT: 'Remontée mécanique',
+	AERIAL_LIFT: 'Remontée mécanique',
 	toll: 'Attention ! Route à péage.',
 	accessRestriction: 'Accès restreint',
-	continuesAs: 'Continue comme'
+	continuesAs: 'Continue comme',
+	rent: 'Louer',
+	copyToClipboard: 'Copier dans le presse-papiers',
+	rideThroughAllowed: 'Passage autorisé',
+	rideThroughNotAllowed: 'Passage non autorisé',
+	rideEndAllowed: 'Stationnement autorisé',
+	rideEndNotAllowed: 'Stationnement uniquement aux stations'
 };
 
 export default translations;
