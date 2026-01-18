@@ -169,9 +169,19 @@ int batch(int ac, char** av) {
     UTL_START_TIMING(request);
     auto response = std::string{};
     try {
+      std::string target {queries.at(id)};
+
+
+      target.erase(
+          std::remove_if(target.begin(), target.end(),
+                         [](unsigned char c) {
+                           return c == '\r' || c == '\n';
+                         }),
+          target.end());
+
       m.qr_(
           {boost::beast::http::verb::get,
-           boost::beast::string_view{queries.at(id)}, 11},
+           boost::beast::string_view{target}, 11},
           [&](net::web_server::http_res_t const& res) {
             std::visit(
                 [&](auto&& r) {
