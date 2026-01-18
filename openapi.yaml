@@ -662,7 +662,7 @@ paths:
               - `arriveBy=false`: the time window around `date` and `time` refers to the departure time window
           schema:
             type: boolean
-            default: true
+            default: false
 
         - name: arriveBy
           in: query
@@ -676,6 +676,25 @@ paths:
               - `arriveBy=true`: the parameters `date` and `time` refer to the arrival time
               - `arriveBy=false`: the parameters `date` and `time` refer to the departure time
 
+        - name: cancellationProbability
+          in: query
+          required: false
+          schema:
+            type: number
+            format: float
+            default: 0.95
+          description: |
+            Optional. Default is `0.95`.
+
+        - name: maxDelay
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+          description: |
+            Optional. Default is `true`.
+
         - name: searchWindow
           in: query
           required: false
@@ -688,7 +707,7 @@ paths:
               - `arriveBy=false`: number of seconds between the earliest arrival time and the latest arrival time
           schema:
             type: integer
-            default: 1
+            default: 0
             minimum: 0
 
         - name: requireBikeTransport
@@ -845,7 +864,8 @@ paths:
               - RAPTOR
               - PONG
               - TB
-            default: PONG
+              - DA
+            default: DA
       responses:
         '422':
           description: Unprocessable Entity
