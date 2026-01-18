@@ -15,6 +15,7 @@
 #include "motis/config.h"
 #include "motis/import.h"
 #include "motis/match_platforms.h"
+#include "motis/osr/parameters.h"
 
 using namespace std::string_view_literals;
 using namespace osr;
@@ -118,20 +119,13 @@ TEST(motis, get_way_candidates) {
   auto const get_path = [&](search_profile const p, way_candidate const& a,
                             node_candidate const& anc, location const& l) {
     switch (p) {
-      case search_profile::kFoot:
-        return d.l_->get_node_candidate_path<foot<false>>(a, anc, true, l);
-      case search_profile::kWheelchair:
-        return d.l_->get_node_candidate_path<foot<true>>(a, anc, true, l);
-      case search_profile::kCar:
-        return d.l_->get_node_candidate_path<car>(a, anc, true, l);
-      case search_profile::kBike:
-        return d.l_->get_node_candidate_path<bike<kElevationNoCost>>(a, anc,
-                                                                     true, l);
-      case search_profile::kCarSharing:
-        return d.l_->get_node_candidate_path<car_sharing<noop_tracking>>(
-            a, anc, true, l);
+      case search_profile::kFoot: [[fallthrough]];
+      case search_profile::kWheelchair: [[fallthrough]];
+      case search_profile::kCar: [[fallthrough]];
+      case search_profile::kBike: [[fallthrough]];
+      case search_profile::kCarSharing: [[fallthrough]];
       case search_profile::kBikeSharing:
-        return d.l_->get_node_candidate_path<bike_sharing>(a, anc, true, l);
+        return d.l_->get_node_candidate_path(a, anc, true, l);
       default: return std::vector<geo::latlng>{};
     }
   };
@@ -147,8 +141,9 @@ TEST(motis, get_way_candidates) {
         utl::zip(location_idxs, locs),
         [&](std::tuple<nigiri::location_idx_t, osr::location> const ll) {
           auto const& [l, query] = ll;
-          return d.l_->match(query, true, osr::direction::kForward, 250,
-                             nullptr, profile);
+          return d.l_->match(motis::to_profile_parameters(profile, {}), query,
+                             true, osr::direction::kForward, 250, nullptr,
+                             profile);
         });
 
     ASSERT_EQ(with_preprocessing.size(), without_preprocessing.size());
@@ -163,13 +158,13 @@ TEST(motis, get_way_candidates) {
       utl::sort(sorted_with, sort_by_way);
       utl::sort(sorted_without, sort_by_way);
       for (auto [a, b] : utl::zip(sorted_with, sorted_without)) {
-        ASSERT_EQ(a.dist_to_way_, b.dist_to_way_);
+        ASSERT_FLOAT_EQ(a.dist_to_way_, b.dist_to_way_);
         ASSERT_EQ(a.way_, b.way_);
         for (auto const& [anc, bnc] :
              {std::tuple{a.left_, b.left_}, std::tuple{a.right_, b.right_}}) {
           ASSERT_EQ(anc.node_, bnc.node_);
           if (anc.valid()) {
-            EXPECT_EQ(anc.dist_to_node_, bnc.dist_to_node_);
+            EXPECT_FLOAT_EQ(anc.dist_to_node_, bnc.dist_to_node_);
             EXPECT_EQ(anc.cost_, bnc.cost_);
             EXPECT_EQ(anc.lvl_, bnc.lvl_);
             EXPECT_EQ(anc.way_dir_, bnc.way_dir_);
@@ -209,12 +204,13 @@ TEST(motis, get_way_candidates) {
       auto const remote_station =
           osr::location{{49.8731904, 8.6221451}, level_t{}};
       auto const raw = d.l_->get_raw_match(remote_station, dist);
+      auto const params = motis::to_profile_parameters(profile, {});
       auto const with =
-          d.l_->match(remote_station, true, osr::direction::kForward, dist,
-                      nullptr, profile, raw);
+          d.l_->match(params, remote_station, true, osr::direction::kForward,
+                      dist, nullptr, profile, raw);
       auto const without =
-          d.l_->match(remote_station, true, osr::direction::kForward, dist,
-                      nullptr, profile);
+          d.l_->match(params, remote_station, true, osr::direction::kForward,
+                      dist, nullptr, profile);
       EXPECT_NE(0, raw.size());
       EXPECT_EQ(with.size(), without.size());
     }

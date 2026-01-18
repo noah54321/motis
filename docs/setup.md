@@ -20,6 +20,7 @@ timetable:
         - url: https://api.opentransportdata.swiss/gtfsrt2020
           headers:
             Authorization: MY_API_KEY
+          protocol: gtfsrt
 gbfs:
   feeds:
     montreal:
@@ -57,7 +58,6 @@ timetable:                          # if not set, no timetable will be loaded
   num_days: 365                     # number of days to load, default is 365 days
   railviz: true                     # enable viewing vehicles in real-time on the map, requires some extra lookup data structures
   with_shapes: true                 # extract and serve shapes (if disabled, direct lines are used)
-  ignore_errors: false              # ignore errors when a dataset could not be loaded
   adjust_footpaths: true            # if footpaths are too fast, they are adjusted if set to true
   merge_dupes_intra_src: false      # duplicates within the same datasets will be merged
   merge_dupes_inter_src: false      # duplicates withing different datasets will be merged
@@ -76,6 +76,7 @@ timetable:                          # if not set, no timetable will be loaded
         - url: https://api.opentransportdata.swiss/gtfsrt2020
           headers:
             Authorization: MY_API_KEY
+          protocol: gtfsrt          # specify the real time protocol (default: gtfsrt)
     nl:
       path: nl_ovapi.gtfs.zip
       default_bikes_allowed: false
@@ -102,6 +103,10 @@ limits:
   onetoall_max_travel_minutes: 90 # maximum travel duration for one-to-all query that can be requested
   routing_max_timeout_seconds: 90 # maximum duration a routing query may take
   gtfsrt_expose_max_trip_updates: 100 # how many trip updates are allowed to be exposed via the gtfsrt endpoint
+  street_routing_max_prepost_transit_seconds: 3600 # limit for maxPre/PostTransitTime API params, see below
+  street_routing_max_direct_seconds: 21600 # limit for maxDirectTime API param, high values can lead to long-running, RAM-hungry queries 
+logging:
+  log_level: debug                # log-level (default = debug; Supported log-levels: error, info, debug)
 osr_footpath: true                # enable routing footpaths instead of using transfers from timetable datasets
 geocoding: true                   # enable geocoding for place/stop name autocompletion
 reverse_geocoding: false          # enable reverse geocoding for mapping a geo coordinate to nearby places/addresses
@@ -136,17 +141,122 @@ timetable:
         - url: https://stc.traines.eu/mirror/german-delfi-gtfs-rt/latest.gtfs-rt.pbf
 ```
 
-# GBFS Configuration and Default Restrictions
+# GBFS Configuration
 
 This examples shows how to configure multiple GBFS feeds.  
 A GBFS feed might describe a single system or area, `callabike` in this example, or a set of feeds, that are combined to a manifest, like `mobidata-bw` here. For readability, optional headers are not included.
+
+```yaml
+gbfs:
+  feeds:
+    # GBFS feed:
+    callabike:
+      url: https://api.mobidata-bw.de/sharing/gbfs/callabike/gbfs
+    # GBFS manifest / Lamassu feed:
+    mobidata-bw:
+      url: https://api.mobidata-bw.de/sharing/gbfs/v3/manifest.json
+  update_interval: 300
+  http_timeout: 10
+```
+
+## Provider Groups + Colors
+
+GBFS providers (feeds) can be grouped into "provider groups". For example, a provider may operate in multiple locations and provide a feed per location.
+To groups these different feeds into a single provider group, specify the same group name for each feed in the configuration.
+
+Feeds that don't have an explicit group setting in the configuration, their group name is derived from the system name. Group names
+may not contain commas. The API supports both provider groups and individual providers.
+
+Provider colors are loaded from the feed (`brand_assets.color`) if available, but can also be set in the configuration
+to override the values contained in the feed or to set colors for feeds that don't include color information.
+Colors can be set for groups (applies to all providers belonging to the group) or individual providers
+(overrides group color for that feed).
+
+```yaml
+gbfs:
+  feeds:
+    de-CallaBike:
+      url: https://api.mobidata-bw.de/sharing/gbfs/v2/callabike/gbfs
+      color: "#db0016"
+    de-VRNnextbike:
+      url: https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_vn/gbfs.json
+      group: nextbike # uses the group color defined below
+    de-NextbikeFrankfurt:
+      url: https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ff/gbfs.json
+      group: nextbike
+    de-KVV.nextbike:
+      url: https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_fg/gbfs.json
+      group: nextbike
+      color: "#c30937" # override color for this particular feed
+  groups:
+    nextbike:
+      # name: nextbike # Optional: Override the name (otherwise the group id, here "nextbike", is used)
+      color: "#0046d6"
+```
+
+For aggregated feeds (manifest.json or Lamassu), groups and colors can either be assigned to all providers listed in the aggregated feed
+or individually by using the system_id:
+
+```yaml
+gbfs:
+  feeds:
+    aggregated-single-group:
+      url: https://example.com/one-provider-group/manifest.json
+      group: Example
+      color: "#db0016" # or assign a color to the group
+    aggregated-multiple-groups:
+      url: https://example.com/multiple-provider-groups/manifest.json
+      group:
+        source-nextbike-westbike: nextbike # "source-nextbike-westbike" is the system_id
+        source-voi-muenster: VOI
+        source-voi-duisburg-oberhausen: VOI
+      # colors can be specified for individual feeds using the same syntax,
+      # but in this example they are defined for the groups below
+      #color:
+      #  "source-nextbike-westbike": "#0046d6"
+      #  "source-voi-muenster": "#f26961"
+  groups:
+    nextbike:
+      color: "#0046d6"
+    VOI:
+      color: "#f26961"
+```
+
+## HTTP Headers + OAuth
+
+If a feed requires specific HTTP headers, they can be defined like this:
+
+```yaml
+gbfs:
+  feeds:
+    example:
+      url: https://example.com/gbfs
+      headers:
+        authorization: MY_OTHER_API_KEY
+        other-header: other-value
+```
+
+OAuth with client credentials and bearer token types is also supported:
+
+```yaml
+gbfs:
+  feeds:
+    example:
+      url: https://example.com/gbfs
+      oauth:
+        token_url: https://example.com/openid-connect/token
+        client_id: gbfs
+        client_secret: example
+```
+
+## Default Restrictions
 
 A GBFS feed can define geofencing zones and rules, that apply to areas within these zones.
 For restrictions on areas not included in these geofencing zones, a feed may contain global rules.
 If these are missing, it's possible to define `default_restrictions`, that apply to either a single feed or a manifest.
 The following example shows possible configurations:
 
-```
+```yaml
 gbfs:
   feeds:
     # GBFS feed:
@@ -168,3 +278,64 @@ gbfs:
   update_interval: 300
   http_timeout: 10
 ```
+
+# Real time protocols
+
+MOTIS supports multiple protocols for real time feeds. This section shows a list of the protocols, including some pitfalls:
+
+| Protocol | `protocol` | Note |
+| ---- | ---- | ---- |
+| GTFS-RT | `gtfsrt` | This is the default, if `protocol` is ommitted. |
+| SIRI Lite (XML) | `siri` | Currently limited to SIRI Lite ET and SX. Still work in progress. Use with care. |
+| SIRI Lite (JSON) | `siri_json` | Same as `siri`, but expects JSON server responses. See below for expected JSON structure. |
+| VDV AUS / VDV454 | `auser` | Requires [`auser`](https://github.com/motis-project/auser) for subscription handling |
+
+## Supported SIRI Lite services
+
+SIRI feeds are divided into multiple feeds called services (check for instance
+[this](https://en.wikipedia.org/wiki/Service_Interface_for_Real_Time_Information#CEN_SIRI_Functional_Services)
+for a list of all services). Right now MOTIS only supports parsing the
+"Estimated Timetable" (or ET) and the "Situation Exchange" (or SX) SIRI
+services. You can see examples of such feeds
+[here](https://github.com/SIRI-CEN/SIRI/blob/2.2/examples/siri_exm_ET/ext_estimatedTimetable_response.xml)
+and
+[here](https://github.com/SIRI-CEN/SIRI/blob/2.2/examples/siri_exm_SX/exx_situationExchange_response.xml).
+
+If you are using the `siri_json` protocol, note that MOTIS expects the
+following JSON structure:
+
+- **Valid** SIRI Lite JSON response:
+
+  ```json
+  {
+    "ResponseTimestamp": "2004-12-17T09:30:46-05:00",
+    "ProducerRef": "KUBRICK",
+    "Status": true,
+    "MoreData": false,
+    "EstimatedTimetableDelivery": [
+      ...
+    ]
+  }
+  ```
+
+- **Invalid** SIRI Lite JSON response:
+
+  ```json
+  {
+    "Siri": {
+      "ServiceDelivery": {
+        "ResponseTimestamp": "2004-12-17T09:30:46-05:00",
+        "ProducerRef": "KUBRICK",
+        "Status": true,
+        "MoreData": false,
+        "EstimatedTimetableDelivery": [
+          ...
+        ]
+      }
+    }
+  }
+  ```
+
+If, as above, the two top keys `"Siri"` and `"ServiceDelivery"` are included in
+the JSON response, MOTIS will fail to parse the SIRI Lite feed, throwing
+`[VERIFY FAIL] unable to parse time ""` errors.

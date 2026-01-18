@@ -10,6 +10,7 @@
 #include "osr/location.h"
 
 #include "motis/location_routes.h"
+#include "motis/osr/parameters.h"
 
 namespace n = nigiri;
 
@@ -160,24 +161,30 @@ std::optional<geo::latlng> get_platform_center(osr::platforms const& pl,
   }
 
   auto const center = c.get_center();
+  auto const lng_dist = geo::approx_distance_lng_degrees(center);
+
   auto closest = geo::latlng{};
-  auto update_closest = [&, dist = std::numeric_limits<double>::max()](
-                            geo::latlng const& candidate) mutable {
-    auto const candidate_dist = geo::distance(candidate, center);
-    if (candidate_dist < dist) {
+  auto update_closest = [&, squared_dist = std::numeric_limits<double>::max()](
+                            geo::latlng const& candidate,
+                            double const candidate_squared_dist) mutable {
+    if (candidate_squared_dist < squared_dist) {
       closest = candidate;
-      dist = candidate_dist;
+      squared_dist = candidate_squared_dist;
     }
   };
   for (auto const p : pl.platform_ref_[x]) {
     std::visit(
         utl::overloaded{
             [&](osr::node_idx_t const node) {
-              update_closest(pl.get_node_pos(node).as_latlng());
+              auto const candidate = pl.get_node_pos(node).as_latlng();
+              update_closest(candidate, geo::approx_squared_distance(
+                                            candidate, center, lng_dist));
             },
             [&](osr::way_idx_t const way) {
               for (auto const [a, b] : utl::pairwise(w.way_polylines_[way])) {
-                update_closest(geo::closest_on_segment(center, a, b));
+                auto const [best, squared_dist] =
+                    geo::approx_closest_on_segment(center, a, b, lng_dist);
+                update_closest(best, squared_dist);
               }
             }},
         osr::to_ref(p));
@@ -213,7 +220,7 @@ osr::platform_idx_t get_match(n::timetable const& tt,
     auto const dist = geo::distance(*center, ref);
     auto const match_bonus =
         get_match_bonus(pl.platform_names_[x], tt.locations_.ids_[l].view(),
-                        tt.locations_.names_[l].view());
+                        tt.get_default_translation(tt.locations_.names_[l]));
     auto const lvl = pl.get_level(w, x);
     auto const lvl_bonus =
         lvl != osr::kNoLevel && lvl.to_float() != 0.0F ? 5 : 0;
@@ -229,7 +236,7 @@ osr::platform_idx_t get_match(n::timetable const& tt,
 
   if (best != osr::platform_idx_t::invalid()) {
     get_match_bonus(pl.platform_names_[best], tt.locations_.ids_[l].view(),
-                    tt.locations_.names_[l].view());
+                    tt.get_default_translation(tt.locations_.names_[l]));
   }
 
   return best;
@@ -256,17 +263,25 @@ void way_matches_storage::preprocess_osr_matches(
     nigiri::timetable const& tt,
     osr::platforms const& pl,
     osr::ways const& w,
-    osr::lookup const& l,
+    osr::lookup const& lookup,
     platform_matches_t const& platform_matches) {
-  auto const progress_tracker = utl::get_active_progress_tracker();
-  progress_tracker->in_high(tt.n_locations());
-  for (auto i = n::location_idx_t{0U}; i != tt.n_locations(); ++i) {
-    matches_.emplace_back(
-        l.get_raw_match(osr::location{tt.locations_.coordinates_[i],
-                                      pl.get_level(w, platform_matches[i])},
-                        max_matching_distance_));
-    progress_tracker->increment();
-  }
+  auto const pt = utl::get_active_progress_tracker();
+  pt->in_high(tt.n_locations());
+
+  utl::parallel_ordered_collect_threadlocal<int>(
+      tt.n_locations(),
+      [&](int, std::size_t const idx) {
+        auto const l =
+            n::location_idx_t{static_cast<n::location_idx_t::value_t>(idx)};
+        return lookup.get_raw_match(
+            osr::location{tt.locations_.coordinates_[l],
+                          pl.get_level(w, platform_matches[l])},
+            max_matching_distance_);
+      },
+      [&](std::size_t, std::vector<osr::raw_way_candidate>&& l) {
+        matches_.emplace_back(l);
+      },
+      pt->update_fn());
 }
 
 std::vector<osr::match_t> get_reverse_platform_way_matches(
@@ -290,8 +305,8 @@ std::vector<osr::match_t> get_reverse_platform_way_matches(
           auto const& m = way_matches->matches_[l];
           raw_matches = {m.begin(), m.end()};
         }
-        return lookup.match(query, true, dir, max_matching_distance, nullptr, p,
-                            raw_matches);
+        return lookup.match(to_profile_parameters(p, {}), query, true, dir,
+                            max_matching_distance, nullptr, p, raw_matches);
       });
 };
 

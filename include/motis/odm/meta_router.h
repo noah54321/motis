@@ -44,32 +44,33 @@ struct meta_router {
               bool odm_pre_transit,
               bool odm_post_transit,
               bool odm_direct,
+              bool ride_sharing_pre_transit,
+              bool ride_sharing_post_transit,
+              bool ride_sharing_direct,
               unsigned api_version);
+  ~meta_router();
 
   api::plan_response run();
 
   struct routing_result {
-    explicit routing_result(
-        nigiri::routing::routing_result<nigiri::routing::raptor_stats> rr)
+    routing_result() = default;
+    routing_result(nigiri::routing::routing_result rr)
         : journeys_{*rr.journeys_},
           interval_{rr.interval_},
           search_stats_{rr.search_stats_},
-          algo_stats_{rr.algo_stats_} {}
+          algo_stats_{std::move(rr.algo_stats_)} {}
 
     nigiri::pareto_set<nigiri::routing::journey> journeys_{};
     nigiri::interval<nigiri::unixtime_t> interval_{};
     nigiri::routing::search_stats search_stats_{};
-    nigiri::routing::raptor_stats algo_stats_{};
+    std::map<std::string, std::uint64_t> algo_stats_{};
   };
 
 private:
-  void init_prima(nigiri::interval<nigiri::unixtime_t> const& search_intvl,
-                  nigiri::interval<nigiri::unixtime_t> const& odm_intvl);
   nigiri::routing::query get_base_query(
       nigiri::interval<nigiri::unixtime_t> const&) const;
   std::vector<routing_result> search_interval(
       std::vector<nigiri::routing::query> const&) const;
-  void add_direct() const;
 
   ep::routing const& r_;
   api::plan_params const& query_;
@@ -86,6 +87,9 @@ private:
   bool odm_pre_transit_;
   bool odm_post_transit_;
   bool odm_direct_;
+  bool ride_sharing_pre_transit_;
+  bool ride_sharing_post_transit_;
+  bool ride_sharing_direct_;
   unsigned api_version_;
 
   nigiri::timetable const* tt_;
@@ -108,6 +112,8 @@ private:
       dest_propulsion_types_;
   std::optional<std::vector<std::string>> const& start_rental_providers_;
   std::optional<std::vector<std::string>> const& dest_rental_providers_;
+  std::optional<std::vector<std::string>> const& start_rental_provider_groups_;
+  std::optional<std::vector<std::string>> const& dest_rental_provider_groups_;
   bool start_ignore_rental_return_constraints_{};
   bool dest_ignore_rental_return_constraints_{};
 };

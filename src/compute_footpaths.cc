@@ -18,7 +18,8 @@
 #include "motis/constants.h"
 #include "motis/get_loc.h"
 #include "motis/match_platforms.h"
-#include "motis/max_distance.h"
+#include "motis/osr/max_distance.h"
+#include "motis/osr/parameters.h"
 #include "motis/point_rtree.h"
 
 namespace n = nigiri;
@@ -105,6 +106,7 @@ elevator_footpath_map_t compute_footpaths(
           return;
         }
         candidates[l] = lookup.match(
+            to_profile_parameters(mode.profile_, {}),
             get_loc(tt, w, pl, matches, l), false, osr::direction::kForward,
             mode.max_matching_distance_, nullptr, mode.profile_);
       });
@@ -132,7 +134,8 @@ elevator_footpath_map_t compute_footpaths(
               });
 
           auto const results = osr::route(
-              w, lookup, mode.profile_, get_loc(tt, w, pl, matches, l),
+              to_profile_parameters(mode.profile_, {}), w, lookup,
+              mode.profile_, get_loc(tt, w, pl, matches, l),
               utl::transform_to(s.neighbors_, s.neighbors_loc_,
                                 [&](n::location_idx_t const x) {
                                   return get_loc(tt, w, pl, matches, x);
@@ -177,14 +180,14 @@ elevator_footpath_map_t compute_footpaths(
                     [](n::footpath, n::footpath) { assert(false); },
                     [&](utl::op const op, n::footpath const x) {
                       if (op == utl::op::kDel) {
-                        auto const duration =
-                            n::duration_t{static_cast<int>(std::ceil(
-                                (geo::distance(
-                                     tt.locations_.coordinates_[l],
-                                     tt.locations_.coordinates_[x.target()]) /
-                                 0.7) /
-                                60.0))};
-                        s.missing_.emplace_back(x.target(), duration);
+                        auto const dist = geo::distance(
+                            tt.locations_.coordinates_[l],
+                            tt.locations_.coordinates_[x.target()]);
+                        if (dist < 100.0) {
+                          auto const duration = n::duration_t{
+                              static_cast<int>(std::ceil((dist / 0.7) / 60.0))};
+                          s.missing_.emplace_back(x.target(), duration);
+                        }
                       }
                     }});
 

@@ -26,7 +26,7 @@ n::routing::clasz_mask_t to_clasz_mask(std::vector<api::ModeEnum> const& mode) {
         allow(n::clasz::kNight);
         allow(n::clasz::kRegional);
         allow(n::clasz::kRegionalFast);
-        allow(n::clasz::kMetro);
+        allow(n::clasz::kSuburban);
         allow(n::clasz::kSubway);
         break;
       case api::ModeEnum::HIGHSPEED_RAIL: allow(n::clasz::kHighSpeed); break;
@@ -36,17 +36,20 @@ n::routing::clasz_mask_t to_clasz_mask(std::vector<api::ModeEnum> const& mode) {
         allow(n::clasz::kRegionalFast);
         break;
       case api::ModeEnum::REGIONAL_RAIL: allow(n::clasz::kRegional); break;
-      case api::ModeEnum::METRO: allow(n::clasz::kMetro); break;
-      case api::ModeEnum::CABLE_CAR: allow(n::clasz::kCableCar); break;
+      case api::ModeEnum::SUBURBAN: allow(n::clasz::kSuburban); break;
+      case api::ModeEnum::METRO: allow(n::clasz::kSuburban); break;
+      case api::ModeEnum::ODM: allow(n::clasz::kODM); break;
+      case api::ModeEnum::CABLE_CAR: [[fallthrough]];
       case api::ModeEnum::FUNICULAR: allow(n::clasz::kFunicular); break;
-      case api::ModeEnum::AREAL_LIFT: allow(n::clasz::kAreaLift); break;
+      case api::ModeEnum::AERIAL_LIFT: allow(n::clasz::kAerialLift); break;
+      case api::ModeEnum::AREAL_LIFT: allow(n::clasz::kAerialLift); break;
       case api::ModeEnum::OTHER: allow(n::clasz::kOther); break;
 
       case api::ModeEnum::WALK:
       case api::ModeEnum::BIKE:
       case api::ModeEnum::RENTAL:
       case api::ModeEnum::CAR:
-      case api::ModeEnum::ODM:
+      case api::ModeEnum::RIDE_SHARING:
       case api::ModeEnum::FLEX:
       case api::ModeEnum::CAR_DROPOFF: [[fallthrough]];
       case api::ModeEnum::CAR_PARKING: break;

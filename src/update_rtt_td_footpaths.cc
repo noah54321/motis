@@ -2,14 +2,16 @@
 
 #include <map>
 
+#include "utl/equal_ranges_linear.h"
 #include "utl/parallel_for.h"
 
+#include "osr/routing/parameters.h"
 #include "osr/routing/route.h"
 
 #include "motis/constants.h"
 #include "motis/get_loc.h"
 #include "motis/get_stops_with_traffic.h"
-#include "motis/max_distance.h"
+#include "motis/osr/max_distance.h"
 
 namespace n = nigiri;
 using namespace std::chrono_literals;
@@ -89,6 +91,7 @@ std::vector<n::td_footpath> get_td_footpaths(
     osr::search_profile const profile,
     std::chrono::seconds const max,
     double const max_matching_distance,
+    osr_parameters const& osr_params,
     osr::bitvec<osr::node_idx_t>& blocked_mem) {
   blocked_mem.resize(w.n_nodes());
 
@@ -101,7 +104,7 @@ std::vector<n::td_footpath> get_td_footpaths(
     auto const neighbors = get_stops_with_traffic(
         tt, rtt, loc_rtree, start, get_max_distance(profile, max), start_l);
     auto const results = osr::route(
-        w, l, profile, start,
+        to_profile_parameters(profile, osr_params), w, l, profile, start,
         utl::to_vec(neighbors,
                     [&](auto&& x) { return get_loc(tt, w, pl, matches, x); }),
         static_cast<osr::cost_t>(max.count()), dir, max_matching_distance,
@@ -119,6 +122,19 @@ std::vector<n::td_footpath> get_td_footpaths(
   }
 
   utl::sort(fps);
+
+  utl::equal_ranges_linear(
+      fps, [](auto const& a, auto const& b) { return a.target_ == b.target_; },
+      [&](std::vector<n::td_footpath>::iterator& lb,
+          std::vector<n::td_footpath>::iterator& ub) {
+        for (auto it = lb; it != ub; ++it) {
+          if (it->duration_ == n::footpath::kMaxDuration && it != lb &&
+              (it - 1)->duration_ != n::footpath::kMaxDuration) {
+            // TODO support feasible, but longer paths
+            it->valid_from_ -= (it - 1)->duration_ - n::duration_t{1U};
+          }
+        }
+      });
 
   return fps;
 }
@@ -145,7 +161,8 @@ void update_rtt_td_footpaths(
         auto fps = get_td_footpaths(w, l, pl, tt, &rtt, loc_rtree, e, matches,
                                     start, get_loc(tt, w, pl, matches, start),
                                     dir, osr::search_profile::kWheelchair, max,
-                                    kMaxWheelchairMatchingDistance, blocked);
+                                    kMaxWheelchairMatchingDistance,
+                                    osr_parameters{}, blocked);
         {
           auto const lock = std::unique_lock{
               dir == osr::direction::kForward ? out_mutex : in_mutex};

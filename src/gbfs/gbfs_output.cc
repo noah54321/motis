@@ -20,9 +20,12 @@ gbfs_output::gbfs_output(osr::ways const& w,
       sharing_data_{prod_rd_->get_sharing_data(
           w_.n_nodes(), ignore_rental_return_constraints)},
       rental_{
+          .providerId_ = provider_.id_,
+          .providerGroupId_ = provider_.group_id_,
           .systemId_ = provider_.sys_info_.id_,
           .systemName_ = provider_.sys_info_.name_,
           .url_ = provider_.sys_info_.url_,
+          .color_ = provider_.color_,
           .formFactor_ = to_api_form_factor(products_.form_factor_),
           .propulsionType_ = to_api_propulsion_type(products_.propulsion_type_),
           .returnConstraint_ =
@@ -37,14 +40,15 @@ transport_mode_t gbfs_output::get_cache_key() const {
 }
 
 osr::search_profile gbfs_output::get_profile() const {
-  return get_osr_profile(products_);
+  return get_osr_profile(products_.form_factor_);
 }
 
 osr::sharing_data const* gbfs_output::get_sharing_data() const {
   return &sharing_data_;
 }
 
-void gbfs_output::annotate_leg(osr::node_idx_t const from_node,
+void gbfs_output::annotate_leg(nigiri::lang_t const&,
+                               osr::node_idx_t const from_node,
                                osr::node_idx_t const to_node,
                                api::Leg& leg) const {
   auto const from_additional_node = w_.is_additional_node(from_node);
@@ -107,17 +111,21 @@ void gbfs_output::annotate_leg(osr::node_idx_t const from_node,
   }
 }
 
-api::Place gbfs_output::get_place(osr::node_idx_t const n) const {
+api::Place gbfs_output::get_place(nigiri::lang_t const&,
+                                  osr::node_idx_t const n,
+                                  std::optional<std::string> const& tz) const {
   if (w_.is_additional_node(n)) {
     auto const pos = get_sharing_data()->get_additional_node_coordinates(n);
     return api::Place{.name_ = get_node_name(n),
                       .lat_ = pos.lat_,
                       .lon_ = pos.lng_,
+                      .tz_ = tz,
                       .vertexType_ = api::VertexTypeEnum::BIKESHARE};
   } else {
     auto const pos = w_.get_node_pos(n).as_latlng();
     return api::Place{.lat_ = pos.lat_,
                       .lon_ = pos.lng_,
+                      .tz_ = tz,
                       .vertexType_ = api::VertexTypeEnum::NORMAL};
   }
 }

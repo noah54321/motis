@@ -1,12 +1,15 @@
-import type { PlanData } from './api/openapi';
+import type { PlanData } from '@motis-project/motis-client';
 
 export const defaultQuery = {
 	time: undefined,
 	fromPlace: undefined,
 	toPlace: undefined,
+	via: undefined,
+	viaMinimumStay: undefined,
 	arriveBy: false,
 	timetableView: true,
 	withFares: false,
+	searchWindow: 900,
 	pedestrianProfile: 'FOOT',
 	transitModes: ['TRANSIT'],
 	preTransitModes: ['WALK'],
@@ -15,6 +18,9 @@ export const defaultQuery = {
 	preTransitRentalFormFactors: [],
 	postTransitRentalFormFactors: [],
 	directRentalFormFactors: [],
+	preTransitRentalProviderGroups: [],
+	postTransitRentalProviderGroups: [],
+	directRentalProviderGroups: [],
 	preTransitRentalPropulsionTypes: [],
 	postTransitRentalPropulsionTypes: [],
 	directRentalPropulsionTypes: [],
@@ -28,7 +34,7 @@ export const defaultQuery = {
 	joinInterlinedLegs: true,
 	maxMatchingDistance: 25,
 	maxTransfers: 14,
-	maxTravelTime: 45 * 60,
+	maxTravelTime: 30 * 60,
 	maxPreTransitTime: 900,
 	maxPostTransitTime: 900,
 	maxDirectTime: 1800,
@@ -36,12 +42,15 @@ export const defaultQuery = {
 	additionalTransferTime: 0,
 	transferTimeFactor: 1,
 	numItineraries: 5,
+	circleResolution: undefined,
+	maxItineraries: undefined,
 	passengers: 1,
 	luggage: 0,
-	slowDirect: true,
+	slowDirect: false,
 	isochronesDisplayLevel: 'GEOMETRY_CIRCLES',
 	isochronesColor: '#ffff00',
-	isochronesOpacity: 250
+	isochronesOpacity: 250,
+	algorithm: 'PONG'
 };
 
 export const omitDefaults = (query: PlanData['query']): PlanData['query'] => {
