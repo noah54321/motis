@@ -10,10 +10,11 @@
 		type Leg,
 		type PlanData,
 		type PlanError,
-		type PlanResponse
-	} from '$lib/api/openapi';
+		type PlanResponse,
+		type Error as ApiError
+	} from '@motis-project/motis-client';
 	import Time from '$lib/Time.svelte';
-	import LoaderCircle from 'lucide-svelte/icons/loader-circle';
+	import { LoaderCircle } from '@lucide/svelte';
 	import { t } from '$lib/i18n/translation';
 	import DirectConnection from '$lib/DirectConnection.svelte';
 	import type { RequestResult } from '@hey-api/client-fetch';
@@ -29,17 +30,15 @@
 		baseResponse: Promise<PlanResponse> | undefined;
 		baseQuery: PlanData | undefined;
 		selectItinerary: (it: Itinerary) => void;
-		updateStartDest: (r: { data: PlanResponse | undefined; error: unknown }) => PlanResponse;
+		updateStartDest: (r: Awaited<RequestResult<PlanResponse, ApiError, false>>) => PlanResponse;
 	} = $props();
 
 	const throwOnError = (promise: RequestResult<PlanResponse, PlanError, false>) =>
-		promise.then((response) => {
-			console.log(response.error);
-			if (response.error)
-				throw new Error(
-					String((response.error as Record<string, unknown>).error ?? response.error)
-				);
-			return response;
+		promise.then((res) => {
+			if (res.error) {
+				throw { error: res.error.error, status: res.response.status };
+			}
+			return res;
 		});
 </script>
 
@@ -51,8 +50,8 @@
 		<svg class="relative mr-1 w-4 h-4 rounded-full">
 			<use xlink:href={`#${getModeStyle(l)[0]}`}></use>
 		</svg>
-		{#if l.routeShortName}
-			{l.routeShortName}
+		{#if l.displayName}
+			{l.displayName}
 		{:else}
 			{formatDurationSec(l.duration)}
 		{/if}
@@ -115,8 +114,8 @@
 								}}
 							>
 								<Card class="p-4">
-									<div class="text-base h-8 flex justify-around items-center space-x-1 w-full">
-										<div class="overflow-hidden basis-1/4">
+									<div class="text-base flex justify-around items-start space-x-1 w-full">
+										<div class="overflow-hidden basis-1/4 h-full flex flex-col">
 											<div class="text-xs font-bold uppercase text-slate-400">{t.departure}</div>
 											<Time
 												isRealtime={it.legs[0].realTime}
@@ -124,10 +123,11 @@
 												scheduledTimestamp={it.legs[0].scheduledStartTime}
 												variant="realtime-show-always"
 												queriedTime={baseQuery?.query.time}
+												timeZone={it.legs[0].from.tz}
 											/>
 										</div>
 										<Separator orientation="vertical" />
-										<div class="overflow-hidden basis-1/4">
+										<div class="overflow-hidden basis-1/4 h-full flex flex-col">
 											<div class="text-xs font-bold uppercase text-slate-400">{t.arrival}</div>
 											<Time
 												isRealtime={it.legs[it.legs.length - 1].realTime}
@@ -135,16 +135,23 @@
 												scheduledTimestamp={it.legs[it.legs.length - 1].scheduledEndTime}
 												variant="realtime-show-always"
 												queriedTime={it.startTime}
+												timeZone={it.legs[it.legs.length - 1].to.tz}
 											/>
 										</div>
 										<Separator orientation="vertical" />
-										<div class="overflow-hidden basis-1/4">
-											<div class="text-xs font-bold uppercase text-slate-400">{t.transfers}</div>
-											<div class="text-center">{it.transfers}</div>
+										<div class="overflow-hidden basis-1/4 h-full flex flex-col">
+											<div class="text-xs font-bold uppercase text-slate-400">
+												{t.transfers}
+											</div>
+											<div class="text-center text-nowrap">
+												{it.transfers}
+											</div>
 										</div>
 										<Separator orientation="vertical" />
-										<div class="overflow-hidden basis-1/4">
-											<div class="text-xs font-bold uppercase text-slate-400">{t.duration}</div>
+										<div class="overflow-hidden basis-1/4 h-full flex flex-col">
+											<div class="text-xs font-bold uppercase text-slate-400">
+												{t.duration}
+											</div>
 											<div class="text-center text-nowrap">
 												{formatDurationSec(it.duration)}
 											</div>
@@ -159,7 +166,7 @@
 									</div>
 									<Separator class="my-2" />
 									<div class="mt-4 flex flex-wrap gap-x-3 gap-y-3">
-										{#each it.legs.filter((l, i) => (i == 0 && l.duration > 1) || (i == it.legs.length - 1 && l.duration > 1) || l.routeShortName || l.mode != 'WALK') as l, i (i)}
+										{#each it.legs.filter((l, i) => (i == 0 && l.duration > 1) || (i == it.legs.length - 1 && l.duration > 1) || l.displayName || l.mode != 'WALK') as l, i (i)}
 											{@render legSummary(l)}
 										{/each}
 									</div>
@@ -187,14 +194,14 @@
 							</div>
 						{/if}
 					{:catch e}
-						<ErrorMessage {e} />
+						<ErrorMessage message={e.error ?? e} status={e.status ?? 404} />
 					{/await}
 				{/each}
 			</div>
 		{:else if r.direct.length === 0}
-			<ErrorMessage e={t.noItinerariesFound} />
+			<ErrorMessage message={t.noItinerariesFound} status={200} />
 		{/if}
 	{:catch e}
-		<ErrorMessage {e} />
+		<ErrorMessage message={e.error ?? e} status={e.status ?? 404} />
 	{/await}
 {/if}

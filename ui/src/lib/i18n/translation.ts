@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import bg from './bg';
 import en from './en';
 import de from './de';
 import fr from './fr';
@@ -19,8 +20,21 @@ export type Translations = {
 	car: string;
 	taxi: string;
 	moped: string;
+	unknownVehicleType: string;
+	electricAssist: string;
+	electric: string;
+	combustion: string;
+	combustionDiesel: string;
+	hybrid: string;
+	plugInHybrid: string;
+	hydrogenFuelCell: string;
 	from: string;
 	to: string;
+	viaStop: string;
+	viaStops: string;
+	addViaStop: string;
+	removeViaStop: string;
+	viaStayDuration: string;
 	position: string;
 	arrival: string;
 	departure: string;
@@ -35,13 +49,21 @@ export type Translations = {
 	switchToDepartures: string;
 	arrivalOnTrack: string;
 	track: string;
+	platform: string;
+	trackAbr: string;
+	platformAbr: string;
 	tripIntermediateStops: (n: number) => string;
 	sharingProvider: string;
+	sharingProviders: string;
+	returnOnlyAtStations: string;
 	roundtripStationReturnConstraint: string;
+	rentalStation: string;
+	rentalGeofencingZone: string;
 	noItinerariesFound: string;
 	advancedSearchOptions: string;
 	selectTransitModes: string;
 	defaultSelectedModes: string;
+	defaultSelectedProviders: string;
 	selectElevationCosts: string;
 	wheelchair: string;
 	useRoutedTransfers: string;
@@ -71,7 +93,7 @@ export type Translations = {
 	SUBWAY: string;
 	FERRY: string;
 	AIRPLANE: string;
-	METRO: string;
+	SUBURBAN: string;
 	BUS: string;
 	COACH: string;
 	RAIL: string;
@@ -107,6 +129,12 @@ export type Translations = {
 		noData: string;
 		requestFailed: string;
 	};
+	alerts: {
+		validFrom: string;
+		until: string;
+		information: string;
+		more: string;
+	};
 	RENTAL_BICYCLE: string;
 	RENTAL_CARGO_BICYCLE: string;
 	RENTAL_CAR: string;
@@ -117,14 +145,21 @@ export type Translations = {
 	incline: string;
 	CABLE_CAR: string;
 	FUNICULAR: string;
-	AREAL_LIFT: string;
+	AERIAL_LIFT: string;
 	toll: string;
 	accessRestriction: string;
 	continuesAs: string;
+	rent: string;
+	copyToClipboard: string;
+	rideThroughAllowed: string;
+	rideThroughNotAllowed: string;
+	rideEndAllowed: string;
+	rideEndNotAllowed: string;
 };
 
 const translations: Map<string, Translations> = new Map(
 	Object.entries({
+		bg,
 		pl,
 		en,
 		de,
@@ -133,9 +168,17 @@ const translations: Map<string, Translations> = new Map(
 	})
 );
 
+const urlLanguage = browser
+	? new URLSearchParams(window.location.search).get('language')
+	: undefined;
+
 const translationsKey = (
-	browser ? (navigator.languages.find((l) => translations.has(l.slice(0, 2))) ?? 'en') : 'en'
+	urlLanguage && translations.get(urlLanguage ?? '')
+		? urlLanguage
+		: browser
+			? (navigator.languages.find((l) => translations.has(l.slice(0, 2))) ?? 'en')
+			: 'en'
 )?.slice(0, 2);
 
-export const language = translationsKey ?? (browser ? navigator.language : 'en');
+export const language = urlLanguage ?? translationsKey;
 export const t = translationsKey ? translations.get(translationsKey)! : en;

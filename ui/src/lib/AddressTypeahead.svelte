@@ -1,13 +1,11 @@
 <script lang="ts">
 	import { Combobox } from 'bits-ui';
-	import { geocode, type Match } from './api/openapi';
-	import Bus from 'lucide-svelte/icons/bus-front';
-	import House from 'lucide-svelte/icons/map-pin-house';
-	import Place from 'lucide-svelte/icons/map-pin';
+	import { geocode, type LocationType, type Match, type Mode } from '@motis-project/motis-client';
+	import { MapPinHouse as House, MapPin as Place } from '@lucide/svelte';
 	import { parseCoordinatesToLocation, type Location } from './Location';
 	import { language } from './i18n/translation';
 	import maplibregl from 'maplibre-gl';
-	import { onClickStop } from '$lib/utils';
+	import { getModeStyle, type LegLike } from './modeStyle';
 
 	let {
 		items = $bindable([]),
@@ -15,14 +13,18 @@
 		placeholder,
 		name,
 		place,
-		onlyStations = $bindable(false)
+		type,
+		transitModes,
+		onChange = () => {}
 	}: {
 		items?: Array<Location>;
 		selected: Location;
 		placeholder?: string;
 		name?: string;
 		place?: maplibregl.LngLatLike;
-		onlyStations?: boolean;
+		type?: undefined | LocationType;
+		transitModes?: Mode[];
+		onChange?: (location: Location) => void;
 	} = $props();
 
 	let inputValue = $state('');
@@ -40,6 +42,7 @@
 				area = match.areas[0]!.name;
 			}
 
+			/* eslint-disable-next-line svelte/prefer-svelte-reactivity */
 			const areas = new Set<number>();
 			match.areas.forEach((a, i) => {
 				if (a.matched || a.unique || a.default) {
@@ -65,13 +68,20 @@
 		if (coord) {
 			selected = coord;
 			items = [];
+			onChange(selected);
 			return;
 		}
 
 		const pos = place ? maplibregl.LngLat.convert(place) : undefined;
 		const biasPlace = pos ? { place: `${pos.lat},${pos.lng}` } : {};
 		const { data: matches, error } = await geocode({
-			query: { ...biasPlace, text: inputValue, language, type: onlyStations ? 'STOP' : undefined }
+			query: {
+				...biasPlace,
+				text: inputValue,
+				language: [language],
+				mode: transitModes,
+				type
+			}
 		});
 		if (error) {
 			console.error('TYPEAHEAD ERROR: ', error);
@@ -83,6 +93,7 @@
 				match
 			};
 		});
+		/* eslint-disable-next-line svelte/prefer-svelte-reactivity */
 		const shown = new Set<string>();
 		items = items.filter((x) => {
 			const entry = x.match?.type + x.label!;
@@ -127,6 +138,19 @@
 	});
 </script>
 
+{#snippet modeCircle(mode: Mode)}
+	{@const modeIcon = getModeStyle({ mode } as LegLike)[0]}
+	{@const modeColor = getModeStyle({ mode } as LegLike)[1]}
+	<div
+		class="rounded-full flex items-center justify-center p-1"
+		style="background-color: {modeColor}; fill: white;"
+	>
+		<svg class="relative size-4 rounded-full">
+			<use xlink:href={`#${modeIcon}`}></use>
+		</svg>
+	</div>
+{/snippet}
+
 <Combobox.Root
 	type="single"
 	allowDeselect={false}
@@ -135,10 +159,7 @@
 		if (e) {
 			selected = deserialize(e);
 			inputValue = selected.label!;
-			if (onlyStations && selected.match) {
-				const match = selected.match;
-				onClickStop(match.name, match.id, new Date(), undefined, true);
-			}
+			onChange(selected);
 		}
 	}}
 >
@@ -160,23 +181,42 @@
 			>
 				{#each items as item (item.match)}
 					<Combobox.Item
-						class="flex w-full cursor-default select-none items-center rounded-sm py-4 pl-4 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:opacity-50"
+						class="flex w-full cursor-default select-none rounded-sm py-4 pl-4 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:opacity-50"
 						value={JSON.stringify(item.match)}
 						label={item.label}
 					>
+						<div class="flex items-center grow">
+							{#if item.match?.type == 'STOP'}
+								{@render modeCircle(item.match.modes?.length ? item.match.modes![0] : 'BUS')}
+							{:else if item.match?.type == 'ADDRESS'}
+								<House class="size-5" />
+							{:else if item.match?.type == 'PLACE'}
+								{#if !item.match?.category || item.match?.category == 'none'}
+									<Place class="size-5" />
+								{:else}
+									<img
+										src={`icons/${item.match?.category}.svg`}
+										alt={item.match?.category}
+										class="size-5"
+									/>
+								{/if}
+							{/if}
+							<div class="flex flex-col ml-4">
+								<span class="font-semibold text-nowrap text-ellipsis overflow-hidden">
+									{item.match?.name}
+								</span>
+								<span class="text-muted-foreground text-nowrap text-ellipsis overflow-hidden">
+									{getDisplayArea(item.match)}
+								</span>
+							</div>
+						</div>
 						{#if item.match?.type == 'STOP'}
-							<Bus />
-						{:else if item.match?.type == 'ADDRESS'}
-							<House />
-						{:else if item.match?.type == 'PLACE'}
-							<Place />
+							<div class="mt-1 ml-4 flex flex-row gap-1.5 items-center">
+								{#each item.match.modes! as mode, i (i)}
+									{@render modeCircle(mode)}
+								{/each}
+							</div>
 						{/if}
-						<span class="ml-4 font-semibold text-nowrap text-ellipsis overflow-hidden">
-							{item.match?.name}
-						</span>
-						<span class="ml-2 text-muted-foreground text-nowrap text-ellipsis overflow-hidden">
-							{getDisplayArea(item.match)}
-						</span>
 					</Combobox.Item>
 				{/each}
 			</Combobox.Content>

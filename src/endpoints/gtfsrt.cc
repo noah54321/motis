@@ -9,8 +9,9 @@
 
 #include "utl/enumerate.h"
 
+#include "net/too_many_exception.h"
+
 #include "nigiri/loader/gtfs/stop_seq_number_encoding.h"
-#include "nigiri/location.h"
 #include "nigiri/rt/frun.h"
 #include "nigiri/rt/rt_timetable.h"
 #include "nigiri/timetable.h"
@@ -51,7 +52,12 @@ void add_trip_updates(n::timetable const& tt,
             : transit_realtime::TripDescriptor_ScheduleRelationship::
                   TripDescriptor_ScheduleRelationship_SCHEDULED);
     if (!fr.is_scheduled()) {
-      // td->set_route_id(route_id); TODO
+      auto const route_id_idx = fr.rtt_->rt_transport_route_id_.at(fr.rt_);
+      if (route_id_idx != n::route_id_idx_t::invalid()) {
+        td->set_route_id(
+            tt.route_ids_[fr.rtt_->rt_transport_src_.at(fr.rt_)].ids_.get(
+                route_id_idx));
+      }
     }
     if (fr.is_cancelled()) {
       return;
@@ -180,10 +186,11 @@ net::reply gtfsrt::operator()(net::route_request const& req, bool) const {
   auto const rt = rt_;
   auto const rtt = rt->rtt_.get();
 
-  utl::verify(config_.limits_.value().gtfsrt_expose_max_trip_updates_ != 0 &&
-                  rtt->n_rt_transports() <
-                      config_.limits_.value().gtfsrt_expose_max_trip_updates_,
-              "number of trip updates above configured limit");
+  utl::verify<net::too_many_exception>(
+      config_.limits_.value().gtfsrt_expose_max_trip_updates_ != 0 &&
+          rtt->n_rt_transports() <
+              config_.limits_.value().gtfsrt_expose_max_trip_updates_,
+      "number of trip updates above configured limit");
 
   auto fm = transit_realtime::FeedMessage();
   auto fh = fm.mutable_header();

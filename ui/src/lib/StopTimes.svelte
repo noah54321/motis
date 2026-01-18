@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { stoptimes, type StoptimesError, type StoptimesResponse } from '$lib/api/openapi';
-	import LoaderCircle from 'lucide-svelte/icons/loader-circle';
-	import ArrowRight from 'lucide-svelte/icons/arrow-right';
-	import CircleX from 'lucide-svelte/icons/circle-x';
-	import Info from 'lucide-svelte/icons/info';
+	import {
+		stoptimes,
+		type StoptimesError,
+		type StoptimesResponse
+	} from '@motis-project/motis-client';
+	import { LoaderCircle, ArrowRight, CircleX } from '@lucide/svelte';
 	import ErrorMessage from '$lib/ErrorMessage.svelte';
 	import Time from '$lib/Time.svelte';
 	import Route from '$lib/Route.svelte';
@@ -11,12 +12,19 @@
 	import { language, t } from '$lib/i18n/translation';
 	import type { RequestResult } from '@hey-api/client-fetch';
 	import { onClickStop, onClickTrip } from '$lib/utils';
+	import { getModeLabel } from './map/getModeLabel';
+	import { posToLocation } from './Location';
+	import type { Location } from './Location';
+	import maplibregl from 'maplibre-gl';
+	import Alerts from './Alerts.svelte';
 
 	let {
 		stopId,
 		stopName,
 		time: queryTime,
 		stopNameFromResponse = $bindable(),
+		stop = $bindable(),
+		stopMarker = $bindable(),
 		arriveBy
 	}: {
 		stopId: string;
@@ -24,9 +32,19 @@
 		time: Date;
 		arriveBy?: boolean;
 		stopNameFromResponse: string;
+		stop: Location | undefined;
+		stopMarker: maplibregl.Marker | undefined;
 	} = $props();
 
-	let query = $derived({ stopId, time: queryTime.toISOString(), arriveBy, n: 10, language });
+	let query = $derived({
+		stopId,
+		time: queryTime.toISOString(),
+		arriveBy,
+		n: 10,
+		exactRadius: false,
+		radius: 200,
+		language: [language]
+	});
 	/* eslint-disable svelte/prefer-writable-derived */
 	let responses = $state<Array<Promise<StoptimesResponse>>>([]);
 	$effect(() => {
@@ -38,16 +56,19 @@
 		promise.then((response) => {
 			if (response.error) {
 				console.log(response.error);
-				throw new Error('HTTP ' + response.response?.status);
+				throw { error: response.error.error, status: response.response.status };
 			}
 			stopNameFromResponse = response.data?.place?.name || '';
+			let placeFromResponse = response.data?.place;
+			stop = posToLocation(
+				maplibregl.LngLat.convert([placeFromResponse.lon, placeFromResponse.lat])
+			);
+			stopMarker?.setLngLat(stop.match!);
 			return response.data!;
 		});
 </script>
 
-<div
-	class="text-base grid gap-y-2 gap-x-2 grid-cols-[repeat(3,max-content)_auto] auto-rows-fr items-center"
->
+<div class="gap-y-3 mb-1 text-base grid grid-cols-[auto_1fr] items-start content-start">
 	<div class="col-span-full w-full flex items-center justify-center">
 		<Button
 			class="font-bold"
@@ -65,7 +86,7 @@
 	</div>
 	{#each responses as r, rI (rI)}
 		{#await r}
-			<div class="col-span-full w-full flex items-center justify-center">
+			<div class="flex items-center justify-center">
 				<LoaderCircle class="animate-spin w-12 h-12 m-20" />
 			</div>
 		{:then r}
@@ -87,26 +108,51 @@
 					<div class="border-t w-full h-0"></div>
 				</div>
 			{/if}
-
 			{#each r.stopTimes as stopTime, i (i)}
 				{@const timestamp = arriveBy ? stopTime.place.arrival! : stopTime.place.departure!}
 				{@const scheduledTimestamp = arriveBy
 					? stopTime.place.scheduledArrival!
 					: stopTime.place.scheduledDeparture!}
-				<Route class="w-fit max-w-32 text-ellipsis overflow-hidden" l={stopTime} {onClickTrip} />
-				<Time
-					variant="schedule"
-					isRealtime={stopTime.realTime}
-					{timestamp}
-					{scheduledTimestamp}
-					queriedTime={queryTime.toISOString()}
-				/>
-				<Time variant="realtime" isRealtime={stopTime.realTime} {timestamp} {scheduledTimestamp} />
-				<span>
-					<div class="flex items-center text-muted-foreground min-w-0">
-						<div><ArrowRight class="stroke-muted-foreground h-4 w-4" /></div>
-						<span class="ml-1 leading-tight text-ellipsis overflow-hidden">{stopTime.headsign}</span
-						>
+				<div class="">
+					<div class="flex col justify-between">
+						<Route class="max-w-30 text-ellipsis overflow-hidden" l={stopTime} {onClickTrip} />
+						<div class="mx-4">
+							<Time
+								variant="schedule"
+								timeZone={stopTime.place.tz}
+								isRealtime={stopTime.realTime}
+								{timestamp}
+								{scheduledTimestamp}
+								queriedTime={queryTime.toISOString()}
+								{arriveBy}
+							/>
+							<Time
+								variant="realtime"
+								timeZone={stopTime.place.tz}
+								isRealtime={stopTime.realTime}
+								{timestamp}
+								{scheduledTimestamp}
+								{arriveBy}
+							/>
+						</div>
+					</div>
+				</div>
+				<div class="w-full">
+					<div class="flex items-start justify-between text-base">
+						<div class="flex items-start gap-1">
+							<ArrowRight class="mt-1 shrink-0 stroke-muted-foreground h-4 w-4" />
+							{stopTime.headsign}
+							{#if !stopTime.headsign || !stopTime.tripTo.name.startsWith(stopTime.headsign)}
+								({stopTime.tripTo.name})
+							{/if}
+						</div>
+						{#if stopTime.place.track}
+							<span class="mt-1 text-nowrap px-1 border text-xs rounded-xl">
+								{getModeLabel(stopTime.mode) == 'Track' ? t.trackAbr : t.platformAbr}
+								{stopTime.place.track}
+							</span>
+						{/if}
+						<Alerts tz={stopTime.place.tz} alerts={stopTime.place.alerts} />
 					</div>
 					{#if stopTime.pickupDropoffType == 'NOT_ALLOWED'}
 						<div class="flex items-center text-destructive text-sm">
@@ -122,19 +168,12 @@
 							</span>
 						</div>
 					{/if}
-					{#if stopTime.place.alerts}
-						<div class="flex items-center text-destructive text-sm">
-							<Info class="stroke-destructive h-4 w-4" />
-							<span class="ml-1 leading-none">
-								{t.alertsAvailable}
-							</span>
-						</div>
-					{/if}
-				</span>
+				</div>
+				<div class="border col-span-full"></div>
 			{/each}
 			{#if !r.stopTimes.length}
 				<div class="col-span-full w-full flex items-center justify-center">
-					<ErrorMessage e={t.noItinerariesFound} />
+					<ErrorMessage message={t.noItinerariesFound} status={404} />
 				</div>
 			{/if}
 
@@ -156,7 +195,7 @@
 			{/if}
 		{:catch e}
 			<div class="col-span-full w-full flex items-center justify-center">
-				<ErrorMessage {e} />
+				<ErrorMessage message={e.error} status={e.status} />
 			</div>
 		{/await}
 	{/each}

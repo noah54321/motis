@@ -15,7 +15,9 @@ struct geocode {
   nigiri::timetable const* tt_;
   tag_lookup const* tags_;
   adr::typeahead const& t_;
+  adr::formatter const& f_;
   adr::cache& cache_;
+  adr_ext const* ae_;
 };
 
 }  // namespace motis::ep

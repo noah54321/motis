@@ -5,7 +5,9 @@
 #include "utl/concat.h"
 
 #include "osr/lookup.h"
+#include "osr/routing/parameters.h"
 #include "osr/routing/profiles/foot.h"
+#include "osr/routing/route.h"
 #include "osr/ways.h"
 
 #include "motis/constants.h"
@@ -14,7 +16,7 @@
 #include "motis/flex/flex_areas.h"
 #include "motis/flex/flex_routing_data.h"
 #include "motis/match_platforms.h"
-#include "motis/max_distance.h"
+#include "motis/osr/max_distance.h"
 
 namespace n = nigiri;
 
@@ -72,9 +74,9 @@ osr::sharing_data prepare_sharing_data(n::timetable const& tt,
     auto const pos = get_location(&tt, &w, pl, pl_matches, tt_location{l});
     auto const l_additional_node_idx = next_add_node_idx++;
 
-    auto const matches =
-        lookup.match<osr::foot<false>>(pos, false, osr::direction::kForward,
-                                       kMaxGbfsMatchingDistance, nullptr);
+    auto const matches = lookup.match<osr::foot<false>>(
+        osr::foot<false>::parameters{}, pos, false, osr::direction::kForward,
+        kMaxGbfsMatchingDistance, nullptr);
 
     for (auto const& m : matches) {
       auto const handle_node = [&](osr::node_candidate const& node) {
@@ -270,8 +272,12 @@ void add_flex_td_offsets(osr::ways const& w,
                          osr::direction const dir,
                          std::chrono::seconds const max,
                          double const max_matching_distance,
+                         osr_parameters const& osr_params,
                          flex_routing_data& frd,
-                         n::routing::td_offsets_t& ret) {
+                         n::routing::td_offsets_t& ret,
+                         std::map<std::string, std::uint64_t>& stats) {
+  UTL_START_TIMING(flex_lookup_timer);
+
   auto const max_dist = get_max_distance(osr::search_profile::kCarSharing, max);
   auto const near_stops = loc_rtree.in_radius(pos.pos_, max_dist);
   auto const near_stop_locations =
@@ -279,8 +285,10 @@ void add_flex_td_offsets(osr::ways const& w,
         return get_location(&tt, &w, pl, matches, tt_location{l});
       });
 
+  auto const params =
+      to_profile_parameters(osr::search_profile::kCarSharing, osr_params);
   auto const pos_match =
-      lookup.match(pos, false, dir, max_matching_distance, nullptr,
+      lookup.match(params, pos, false, dir, max_matching_distance, nullptr,
                    osr::search_profile::kCarSharing);
   auto const near_stop_matches = get_reverse_platform_way_matches(
       lookup, way_matches, osr::search_profile::kCarSharing, near_stops,
@@ -288,14 +296,21 @@ void add_flex_td_offsets(osr::ways const& w,
 
   auto const routings =
       get_flex_routings(tt, loc_rtree, start_time, pos.pos_, dir, max);
+
+  stats.emplace(fmt::format("prepare_{}_FLEX_lookup", to_str(dir)),
+                UTL_GET_TIMING_MS(flex_lookup_timer));
+
   for (auto const& [stop_seq, transports] : routings) {
+    UTL_START_TIMING(routing_timer);
+
     auto const sharing_data = prepare_sharing_data(
         tt, w, lookup, pl, fa, matches, transports.front(), dir, frd);
 
-    auto const paths = osr::route(
-        w, lookup, osr::search_profile::kCarSharing, pos, near_stop_locations,
-        pos_match, near_stop_matches, static_cast<osr::cost_t>(max.count()),
-        dir, nullptr, &sharing_data, nullptr);
+    auto const paths =
+        osr::route(params, w, lookup, osr::search_profile::kCarSharing, pos,
+                   near_stop_locations, pos_match, near_stop_matches,
+                   static_cast<osr::cost_t>(max.count()), dir, nullptr,
+                   &sharing_data, nullptr);
     auto const day_idx_iv = get_relevant_days(tt, start_time);
     for (auto const id : transports) {
       auto const t = id.get_flex_transport();
@@ -347,6 +362,19 @@ void add_flex_td_offsets(osr::ways const& w,
         }
       }
     }
+
+    stats.emplace(
+        fmt::format("prepare_{}_FLEX_{}", to_str(dir),
+                    tt.flex_stop_seq_[stop_seq.first][stop_seq.second].apply(
+                        utl::overloaded{[&](n::location_group_idx_t const g) {
+                                          return tt.get_default_translation(
+                                              tt.location_group_name_[g]);
+                                        },
+                                        [&](n::flex_area_idx_t const a) {
+                                          return tt.get_default_translation(
+                                              tt.flex_area_name_[a]);
+                                        }})),
+        UTL_GET_TIMING_MS(routing_timer));
   }
 
   for (auto& [_, offsets] : ret) {

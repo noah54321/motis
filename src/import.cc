@@ -29,10 +29,12 @@
 #include "nigiri/loader/loader_interface.h"
 #include "nigiri/clasz.h"
 #include "nigiri/common/parse_date.h"
+#include "nigiri/routing/tb/preprocess.h"
 #include "nigiri/rt/create_rt_timetable.h"
 #include "nigiri/rt/rt_timetable.h"
 #include "nigiri/shapes_storage.h"
 #include "nigiri/timetable.h"
+#include "nigiri/timetable_metrics.h"
 
 #include "osr/extract/extract.h"
 #include "osr/lookup.h"
@@ -106,17 +108,17 @@ struct fmt::formatter<motis::task> : fmt::ostream_formatter {};
 namespace motis {
 
 cista::hash_t hash_file(fs::path const& p) {
-  if (p.generic_string().starts_with("\n#")) {
-    return cista::hash(p.generic_string());
+  auto const str = p.generic_string();
+  if (str.starts_with("\nfunction") || str.starts_with("\n#")) {
+    return cista::hash(str);
   } else if (fs::is_directory(p)) {
     auto h = cista::BASE_HASH;
-    for (auto const& file : fs::directory_iterator{p}) {
-      h = cista::hash_combine(h, hash_file(file));
-    }
+    // for (auto const& file : fs::directory_iterator{p}) {
+    //   h = cista::hash_combine(h, hash_file(file));
+    // }
     return h;
   } else {
-    auto const mmap =
-        cista::mmap{p.generic_string().c_str(), cista::mmap::protection::READ};
+    auto const mmap = cista::mmap{str.c_str(), cista::mmap::protection::READ};
     return cista::hash_combine(
         cista::hash(mmap.view().substr(
             0U, std::min(mmap.size(),
@@ -150,6 +152,9 @@ data import(config const& c, fs::path const& data_path, bool const write) {
           h, c.osr_footpath_, hash_file(d.path_), d.default_bikes_allowed_,
           d.default_cars_allowed_, d.clasz_bikes_allowed_,
           d.clasz_cars_allowed_, d.default_timezone_, d.extend_calendar_);
+      if (d.script_.has_value()) {
+        h = cista::build_seeded_hash(h, hash_file(*d.script_));
+      }
     }
 
     h = cista::build_seeded_hash(
@@ -267,9 +272,10 @@ data import(config const& c, fs::path const& data_path, bool const write) {
 
         auto const& t = *c.timetable_;
 
-        auto const first_day = n::parse_date(t.first_day_);
+        auto const first_day =
+            n::parse_date(t.first_day_) - std::chrono::days{1};
         auto const interval = n::interval<date::sys_days>{
-            first_day, first_day + std::chrono::days{t.num_days_}};
+            first_day, first_day + std::chrono::days{t.num_days_ + 1U}};
 
         auto assistance = std::unique_ptr<nl::assistance_times>{};
         if (t.assistance_times_.has_value()) {
@@ -287,27 +293,37 @@ data import(config const& c, fs::path const& data_path, bool const write) {
 
         d.tags_ = cista::wrapped{cista::raw::make_unique<tag_lookup>()};
         d.tt_ = cista::wrapped{cista::raw::make_unique<n::timetable>(nl::load(
-            utl::to_vec(t.datasets_,
-                        [&, src = n::source_idx_t{}](
-                            auto&& x) mutable -> nl::timetable_source {
-                          auto const& [tag, dc] = x;
-                          d.tags_->add(src++, tag);
-                          return {
-                              tag,
-                              dc.path_,
-                              {
-                                  .link_stop_distance_ = t.link_stop_distance_,
-                                  .default_tz_ = dc.default_timezone_.value_or(
-                                      dc.default_timezone_.value_or("")),
-                                  .bikes_allowed_default_ = to_clasz_bool_array(
-                                      dc.default_bikes_allowed_,
-                                      dc.clasz_bikes_allowed_),
-                                  .cars_allowed_default_ = to_clasz_bool_array(
-                                      dc.default_cars_allowed_,
-                                      dc.clasz_cars_allowed_),
-                                  .extend_calendar_ = dc.extend_calendar_,
-                              }};
-                        }),
+            utl::to_vec(
+                t.datasets_,
+                [&, src = n::source_idx_t{}](
+                    std::pair<std::string, config::timetable::dataset> const&
+                        x) mutable -> nl::timetable_source {
+                  auto const& [tag, dc] = x;
+                  d.tags_->add(src++, tag);
+                  return {
+                      tag,
+                      dc.path_,
+                      {.link_stop_distance_ = t.link_stop_distance_,
+                       .default_tz_ = dc.default_timezone_.value_or(
+                           t.default_timezone_.value_or("")),
+                       .bikes_allowed_default_ = to_clasz_bool_array(
+                           dc.default_bikes_allowed_, dc.clasz_bikes_allowed_),
+                       .cars_allowed_default_ = to_clasz_bool_array(
+                           dc.default_cars_allowed_, dc.clasz_cars_allowed_),
+                       .extend_calendar_ = dc.extend_calendar_,
+                       .user_script_ =
+                           dc.script_
+                               .and_then([](std::string const& path) {
+                                 if (path.starts_with("\nfunction")) {
+                                   return std::optional{path};
+                                 }
+                                 return std::optional{std::string{
+                                     cista::mmap{path.c_str(),
+                                                 cista::mmap::protection::READ}
+                                         .view()}};
+                               })
+                               .value_or("")}};
+                }),
             {.adjust_footpaths_ = t.adjust_footpaths_,
              .merge_dupes_intra_src_ = t.merge_dupes_intra_src_,
              .merge_dupes_inter_src_ = t.merge_dupes_inter_src_,
@@ -320,6 +336,8 @@ data import(config const& c, fs::path const& data_path, bool const write) {
         if (write) {
           d.tt_->write(data_path / "tt.bin");
           d.tags_->write(data_path / "tags.bin");
+          std::ofstream(data_path / "timetable_metrics.json")
+              << to_str(n::get_metrics(*d.tt_), *d.tt_);
         }
 
         d.init_rtt();
@@ -342,59 +360,74 @@ data import(config const& c, fs::path const& data_path, bool const write) {
       },
       {tt_hash, n_version()}};
 
-  auto adr_extend = task{
-      "adr_extend",
-      [&]() {
-        return c.timetable_.has_value() &&
-               (c.geocoding_ || c.reverse_geocoding_);
-      },
+  auto tbd = task{
+      "tbd",
+      [&]() { return c.timetable_.has_value() && c.timetable_->tb_; },
       [&]() { return d.tt_.get() != nullptr; },
       [&]() {
-        auto const area_db = d.t_ ? (std::optional<adr::area_database>{
-                                        std::in_place, data_path / "adr",
-                                        cista::mmap::protection::READ})
-                                  : std::nullopt;
-        if (!d.t_) {
-          d.t_ = cista::wrapped<adr::typeahead>{
-              cista::raw::make_unique<adr::typeahead>()};
-        }
-        adr_extend_tt(*d.tt_, area_db.has_value() ? &*area_db : nullptr, *d.t_);
-        if (write) {
-          auto ec = std::error_code{};
-          std::filesystem::create_directories(data_path / "adr", ec);
-          cista::write(data_path / "adr" / "t_ext.bin", *d.t_);
-        }
-        d.r_.reset();
-        {
-          auto r =
-              adr::reverse{data_path / "adr", cista::mmap::protection::WRITE};
-          r.build_rtree(*d.t_);
-          r.write();
-        }
-        d.t_.reset();
-        if (c.geocoding_) {
-          d.load_geocoder();
-        }
-        if (c.reverse_geocoding_) {
-          d.load_reverse_geocoder();
-        }
+        cista::write(data_path / "tbd.bin",
+                     n::routing::tb::preprocess(*d.tt_, n::kDefaultProfile));
       },
-      [&]() {
-        d.t_.reset();
-        d.r_.reset();
-        if (c.geocoding_) {
-          d.load_geocoder();
-        }
-        if (c.reverse_geocoding_) {
-          d.load_reverse_geocoder();
-        }
-      },
-      {tt_hash,
-       osm_hash,
-       adr_version(),
-       n_version(),
-       {"geocoding", c.geocoding_},
-       {"reverse_geocoding", c.reverse_geocoding_}}};
+      [&]() { d.load_tbd(); },
+      {tt_hash, n_version(), tbd_version()}};
+
+  auto adr_extend =
+      task{"adr_extend",
+           [&]() {
+             return c.timetable_.has_value() &&
+                    (c.geocoding_ || c.reverse_geocoding_);
+           },
+           [&]() { return d.tt_.get() != nullptr; },
+           [&]() {
+             auto const area_db = d.t_ ? (std::optional<adr::area_database>{
+                                             std::in_place, data_path / "adr",
+                                             cista::mmap::protection::READ})
+                                       : std::nullopt;
+             if (!d.t_) {
+               d.t_ = cista::wrapped<adr::typeahead>{
+                   cista::raw::make_unique<adr::typeahead>()};
+             }
+             auto const location_extra_place = adr_extend_tt(
+                 *d.tt_, area_db.has_value() ? &*area_db : nullptr, *d.t_);
+             if (write) {
+               auto ec = std::error_code{};
+               std::filesystem::create_directories(data_path / "adr", ec);
+               cista::write(data_path / "adr" / "t_ext.bin", *d.t_);
+               cista::write(data_path / "adr" / "location_extra_place.bin",
+                            location_extra_place);
+             }
+             d.r_.reset();
+             {
+               auto r = adr::reverse{data_path / "adr",
+                                     cista::mmap::protection::WRITE};
+               r.build_rtree(*d.t_);
+               r.write();
+             }
+             d.t_.reset();
+             if (c.geocoding_) {
+               d.load_geocoder();
+             }
+             if (c.reverse_geocoding_) {
+               d.load_reverse_geocoder();
+             }
+           },
+           [&]() {
+             d.t_.reset();
+             d.r_.reset();
+             if (c.geocoding_) {
+               d.load_geocoder();
+             }
+             if (c.reverse_geocoding_) {
+               d.load_reverse_geocoder();
+             }
+           },
+           {tt_hash,
+            osm_hash,
+            adr_version(),
+            adr_ext_version(),
+            n_version(),
+            {"geocoding", c.geocoding_},
+            {"reverse_geocoding", c.reverse_geocoding_}}};
 
   auto osr_footpath_settings_hash =
       meta_entry_t{"osr_footpath_settings", cista::BASE_HASH};
@@ -482,7 +515,8 @@ data import(config const& c, fs::path const& data_path, bool const write) {
            [&]() { return d.tt_ && d.w_; },
            [&]() { d.load_flex_areas(); },
            [&]() { d.load_flex_areas(); },
-           {tt_hash, osm_hash, osr_version(), n_version(), matches_version()}};
+           {tt_hash, osm_hash, elevation_dir_hash, osr_version(), n_version(),
+            matches_version()}};
 
   auto tiles = task{
       "tiles",
@@ -547,8 +581,8 @@ data import(config const& c, fs::path const& data_path, bool const write) {
            }
       };
 
-  auto tasks = std::vector<task>{tiles,      osr,          adr,     tt,
-                                 adr_extend, osr_footpath, matches, flex_areas, arr_dist};
+  auto tasks = std::vector<task>{
+      tiles, osr, adr, tt, tbd, adr_extend, osr_footpath, matches, flex_areas, arr_dist};
   utl::erase_if(tasks, [&](auto&& t) {
     if (!t.should_run_()) {
       return true;

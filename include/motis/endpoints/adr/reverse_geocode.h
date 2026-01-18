@@ -16,7 +16,9 @@ struct reverse_geocode {
   nigiri::timetable const* tt_;
   tag_lookup const* tags_;
   adr::typeahead const& t_;
+  adr::formatter const& f_;
   adr::reverse const& r_;
+  adr_ext const* ae_;
 };
 
 }  // namespace motis::ep
