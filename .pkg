@@ -1,7 +1,7 @@
 [nigiri]
   url=git@github.com:noah54321/nigiri.git
-  branch=mcRaptor
-  commit=90dfa65be4acc95d90e32e522f52e3a1cf19d2b6
+  branch=route_success
+  commit=26672b0fffd4919ce16af2b686d053c93ac013a7
 [cista]
   url=git@github.com:felixguendling/cista.git
   branch=master
