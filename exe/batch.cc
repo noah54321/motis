@@ -222,7 +222,9 @@ int batch(int ac, char** av) {
   } else {
     auto s = state{};
     for (auto i = 0U; i != queries.size(); ++i) {
-      compute_response(s, i);
+      std::pair<std::uint64_t, std::string> pair = compute_response(s, i);
+      response_time.add(i, pair.first);
+      out << pair.second << "\n";
       pt->increment();
     }
   }
