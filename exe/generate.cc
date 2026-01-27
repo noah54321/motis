@@ -50,6 +50,16 @@ It rand_in(It const begin, It const end) {
       rand_in(0U, static_cast<std::uint32_t>(std::distance(begin, end))));
 }
 
+template <typename It>
+It rand_in(It const begin, It const end,
+           vector_map<n::location_idx_t, unsigned> const& cum_event_count) {
+  std::uint32_t ran = rand_in(0U, static_cast<std::uint32_t>(*(cum_event_count.end()-1)));
+  auto it = std::upper_bound(cum_event_count.begin(), cum_event_count.end(), ran);
+  return std::next(
+      begin,
+      rand_in(0U, static_cast<std::uint32_t>(std::distance(cum_event_count.begin(), it))));
+}
+
 template <typename Collection>
 Collection::value_type rand_in(Collection const& c) {
   using std::begin;
@@ -58,11 +68,21 @@ Collection::value_type rand_in(Collection const& c) {
   return *rand_in(begin(c), end(c));
 }
 
+template <typename Collection>
+Collection::value_type rand_in(Collection const& c,
+                               vector_map<n::location_idx_t, unsigned> const& cum_event_count) {
+  using std::begin;
+  using std::end;
+  utl::verify(!c.empty(), "empty collection");
+  return *rand_in(begin(c), end(c), cum_event_count);
+}
+
 n::location_idx_t random_stop(n::timetable const& tt,
-                              std::vector<n::location_idx_t> const& stops) {
+                              std::vector<n::location_idx_t> const& stops,
+                              vector_map<n::location_idx_t, unsigned> const& cum_event_count) {
   auto s = n::location_idx_t::invalid();
   do {
-    s = rand_in(stops);
+    s = rand_in(stops, cum_event_count);
   } while (tt.location_routes_[s].empty());
   return s;
 }
@@ -294,12 +314,22 @@ int generate(int ac, char** av) {
     return fmt::format("{},{}", pos.lat(), pos.lng());
   };
 
+  vector_map<n::location_idx_t, unsigned> cum_event_count{(&d)->tt_->n_locations()};
+  unsigned cum_sum = 0;
+  for(nigiri::location_idx_t i = nigiri::location_idx_t{0U}; i != d.tt_->n_locations(); ++i){
+    for(auto r: *d.tt_->location_routes_[i]){
+      cum_sum += static_cast<unsigned>((&d)->tt_->route_transport_ranges_[r].size());
+    }
+    cum_event_count.emplace_back(cum_sum);
+  }
+
+
   auto const random_from_to = [&](auto const r) {
     auto from_place = std::optional<std::string>{};
     auto to_place = std::optional<std::string>{};
 
     for (auto x = 0U; x != 1000U; ++x) {
-      auto const from_stop = random_stop(*d.tt_, stops);
+      auto const from_stop = random_stop(*d.tt_, stops, cum_event_count);
       from_place = get_place(from_stop);
       if (!from_place) {
         continue;
@@ -320,7 +350,7 @@ int generate(int ac, char** av) {
         });
         to_place = get_place(stops[r]);
       } else {
-        to_place = get_place(random_stop(*d.tt_, stops));
+        to_place = get_place(random_stop(*d.tt_, stops, cum_event_count));
       }
       if (to_place) {
         break;
