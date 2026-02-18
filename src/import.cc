@@ -568,8 +568,21 @@ data import(config const& c, fs::path const& data_path, bool const write) {
       [&]() { d.load_tiles(); },
       {tiles_version(), osm_hash, tiles_hash}};
 
+  auto arr_dist =
+      task{"arr_dist",
+           [&]() { return c.timetable_.has_value(); },
+           [&]() { return d.tt_.get() != nullptr; },
+           [&]() {
+              std::cout << "run" << std::endl;
+           },
+           [&]() {
+             d.load_arr_dist();
+             std::cout << "load" << std::endl;
+           }
+      };
+
   auto tasks = std::vector<task>{
-      tiles, osr, adr, tt, tbd, adr_extend, osr_footpath, matches, flex_areas};
+      tiles, osr, adr, tt, tbd, adr_extend, osr_footpath, matches, flex_areas, arr_dist};
   utl::erase_if(tasks, [&](auto&& t) {
     if (!t.should_run_()) {
       return true;

@@ -900,7 +900,15 @@ api::plan_response routing::operator()(boost::urls::url_view const& url) const {
     auto algorithm = query.algorithm_;
     auto search_state = n::routing::search_state{};
     while (true) {
-      if (algorithm == api::algorithmEnum::PONG && query.timetableView_ &&
+      if(algorithm == api::algorithmEnum::DA){
+        auto raptor_state = n::routing::raptor_state{};
+        r = n::routing::raptor_search(
+            *tt_, rtt, search_state, raptor_state, q,
+            query.arriveBy_ ? n::direction::kBackward : n::direction::kForward,
+            query.timeout_.has_value() ? std::chrono::seconds{*query.timeout_}
+                                       : max_timeout, *arr_dist_);
+      }
+      else if (algorithm == api::algorithmEnum::PONG && query.timetableView_ &&
           // arriveBy |  extend_later | PONG applicable
           // ---------+---------------+---------------------
           // FALSE    |  FALSE        | FALSE    => rRAPTOR
@@ -933,7 +941,7 @@ api::plan_response routing::operator()(boost::urls::url_view const& url) const {
             *tt_, rtt, search_state, raptor_state, q,
             query.arriveBy_ ? n::direction::kBackward : n::direction::kForward,
             query.timeout_.has_value() ? std::chrono::seconds{*query.timeout_}
-                                       : max_timeout);
+                                       : max_timeout, *arr_dist_);
       } else {
         auto tb_state = n::routing::tb::query_state{*tt_, *tbd_};
         r = n::routing::tb::tb_search(*tt_, search_state, tb_state, q);

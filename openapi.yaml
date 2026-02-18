@@ -607,7 +607,7 @@ paths:
             The default value is 5.
           schema:
             type: integer
-            default: 5
+            default: 1
 
         - name: maxItineraries
           in: query
@@ -662,7 +662,7 @@ paths:
               - `arriveBy=false`: the time window around `date` and `time` refers to the departure time window
           schema:
             type: boolean
-            default: true
+            default: false
 
         - name: arriveBy
           in: query
@@ -688,7 +688,7 @@ paths:
               - `arriveBy=false`: number of seconds between the earliest arrival time and the latest arrival time
           schema:
             type: integer
-            default: 900
+            default: 0
             minimum: 0
 
         - name: requireBikeTransport
@@ -845,7 +845,8 @@ paths:
               - RAPTOR
               - PONG
               - TB
-            default: PONG
+              - DA
+            default: DA
       responses:
         '422':
           description: Unprocessable Entity
@@ -1492,7 +1493,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Itinerary' 
+                $ref: '#/components/schemas/Itinerary'
         '422':
           description: Unprocessable Entity
           content:
@@ -3646,6 +3647,7 @@ components:
         - endTime
         - transfers
         - legs
+        - transferTime
       properties:
         duration:
           description: journey duration in seconds
@@ -3671,6 +3673,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FareTransfer'
+        successChance:
+          type: number
+          format: float
+          description: time of the transfers
 
     Transfer:
       description: transfer from one location to another

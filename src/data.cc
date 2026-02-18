@@ -197,6 +197,12 @@ data::data(std::filesystem::path p, config const& c)
     }
   });
 
+  auto arr_dist = std::async(std::launch::async, [&]() {
+    if (c.tiles_) {
+      load_arr_dist();
+    }
+  });
+
   auto const throw_if_failed = [](char const* context, auto& future) {
     try {
       future.get();
@@ -215,6 +221,7 @@ data::data(std::filesystem::path p, config const& c)
   matches.wait();
   elevators.wait();
   tiles.wait();
+  arr_dist.wait();
 
   throw_if_failed("geocoder", geocoder);
   throw_if_failed("tt", tt);
@@ -346,6 +353,43 @@ void data::load_tiles() {
   auto const db_size = config_.tiles_.value().db_size_;
   tiles_ = std::make_unique<tiles_data>(
       (path_ / "tiles" / "tiles.mdb").generic_string(), db_size);
+}
+
+void data::load_arr_dist() {
+  std::string filename = "motis_product_type.csv";
+
+  std::ifstream file(filename);
+  if (!file.is_open()) {
+    throw std::runtime_error("Kann Datei nicht öffnen: " + filename);
+  }
+
+  std::string line;
+  bool first_line = true;
+  arr_dist_ = std::make_unique<std::vector<std::vector<std::pair<int, double>>>>();
+  arr_dist_->resize(16);
+
+  while (std::getline(file, line)) {
+    if (first_line) {
+      first_line = false;
+      continue;  // Kopfzeile überspringen
+    }
+
+    std::stringstream ss(line);
+    std::string cell;
+    char delimiter = ',';
+
+    if (!std::getline(ss, cell, delimiter)) continue;
+    int id = std::stoi(cell);
+
+    if (!std::getline(ss, cell, delimiter)) continue;
+    int t = cell != "Infinity" ? std::stoi(cell) : std::numeric_limits<nigiri::delta_t>::max();
+
+
+    if (!std::getline(ss, cell, delimiter)) continue;
+    double prob = std::stod(cell);
+
+    (*arr_dist_)[id].push_back({t, prob});
+  }
 }
 
 void data::load_auser_updater(std::string_view tag,

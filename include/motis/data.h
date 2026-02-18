@@ -63,6 +63,7 @@ struct data {
   void load_way_matches();
   void load_reverse_geocoder();
   void load_tiles();
+  void load_arr_dist();
   void load_auser_updater(std::string_view, config::timetable::dataset const&);
 
   void init_rtt(date::sys_days = std::chrono::time_point_cast<date::days>(
@@ -74,7 +75,7 @@ struct data {
                     elevations_, tt_, tbd_, tags_, location_rtree_,
                     elevator_nodes_, shapes_, railviz_static_, matches_,
                     way_matches_, rt_, gbfs_, odm_bounds_, ride_sharing_bounds_,
-                    flex_areas_, metrics_, auser_);
+                    flex_areas_, metrics_, auser_, arr_dist_);
   }
 
   std::filesystem::path path_;
@@ -108,6 +109,7 @@ struct data {
   ptr<flex::flex_areas> flex_areas_;
   ptr<metrics_registry> metrics_;
   ptr<std::map<std::string, auser>> auser_;
+  ptr<std::vector<std::vector<std::pair<int, double>>>> arr_dist_;
 };
 
 }  // namespace motis

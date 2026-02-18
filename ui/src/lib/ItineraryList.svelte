@@ -156,6 +156,13 @@
 												{formatDurationSec(it.duration)}
 											</div>
 										</div>
+										<Separator orientation="vertical" />
+										<div class="overflow-hidden basis-1/4">
+											<div class="text-xs font-bold uppercase text-slate-400">{t.successChance}</div>
+											<div class="text-center text-nowrap">
+												{it.successChance}
+											</div>
+										</div>
 									</div>
 									<Separator class="my-2" />
 									<div class="mt-4 flex flex-wrap gap-x-3 gap-y-3">

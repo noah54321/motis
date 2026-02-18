@@ -39,6 +39,7 @@ export type Translations = {
 	arrival: string;
 	departure: string;
 	duration: string;
+	successChance: string;
 	later: string;
 	earlier: string;
 	arrivals: string;

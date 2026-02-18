@@ -169,9 +169,19 @@ int batch(int ac, char** av) {
     UTL_START_TIMING(request);
     auto response = std::string{};
     try {
+      std::string target {queries.at(id)};
+
+
+      target.erase(
+          std::remove_if(target.begin(), target.end(),
+                         [](unsigned char c) {
+                           return c == '\r' || c == '\n';
+                         }),
+          target.end());
+
       m.qr_(
           {boost::beast::http::verb::get,
-           boost::beast::string_view{queries.at(id)}, 11},
+           boost::beast::string_view{target}, 11},
           [&](net::web_server::http_res_t const& res) {
             std::visit(
                 [&](auto&& r) {
@@ -212,7 +222,9 @@ int batch(int ac, char** av) {
   } else {
     auto s = state{};
     for (auto i = 0U; i != queries.size(); ++i) {
-      compute_response(s, i);
+      std::pair<std::uint64_t, std::string> pair = compute_response(s, i);
+      response_time.add(i, pair.first);
+      out << pair.second << "\n";
       pt->increment();
     }
   }

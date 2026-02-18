@@ -131,6 +131,7 @@ struct routing {
   odm::bounds const* odm_bounds_;
   odm::ride_sharing_bounds const* ride_sharing_bounds_;
   metrics_registry* metrics_;
+  std::vector<std::vector<std::pair<int, double>>>* arr_dist_;
 };
 
 }  // namespace motis::ep

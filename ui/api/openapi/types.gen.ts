@@ -1295,6 +1295,7 @@ export type Itinerary = {
      * Fare information
      */
     fareTransfers?: Array<FareTransfer>;
+		successChance: number;
 };
 
 /**
